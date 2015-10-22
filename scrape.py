@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import requests
 import json
-from math import ceil
+#from math import ceil
 import xmltodict
 import time
 
@@ -10,13 +10,16 @@ MY_API_KEY = '1f271dd2cf40387ab1d7e4645d36f599'
 
 # Metadata to gather:  DOI, Scopus ID, author IDs, source ID, references
 
-def get_meta_by_doi(doi):
+# TODO: handle timeouts exception ReadTimeout
+
+def get_meta_by_doi(doi, save_raw = True):
     '''
     Retrieve metadata for a single paper from Scopus given its DOI
     :param doi: The paper's DOI
     :return: A dict of metadata:
         'doi': The paper's DOI
         'sid': The paper's Scopus ID
+        'pmid': The paper's PubMed ID
         'authors': The paper's authors, as a list of Scopus author IDs
         'source': The journal, etc., the paper was published in, as a Scopus source ID
         'references': The paper's references, as a list of Scopus IDs
@@ -34,16 +37,18 @@ def get_meta_by_doi(doi):
     # Set default values in case of missing data
     doi = ''
     sid = ''
+    pmid = ''
     authors = []
     source = ''
     refs = []
     try:
         # The locations of these metadata are given in the Scopus XML documentation
         # http://ebrp.elsevier.com/pdf/Scopus_Custom_Data_Documentation_v4.pdf
-        # The content for `dc:identifier` looks something like 'Scopus:115628'
+        # The content for `dc:identifier` looks something like 'Scopus:115628'        
         sid = response['abstracts-retrieval-response']['coredata']['dc:identifier']
         sid = sid.split(':')[1]
         #print sid
+        pmid = response['abstracts-retrieval-response']['coredata']['pubmed-id']
         # `authors_resp` grabs a list of dicts, one for each author
         # We're only grabbing the Scoupus ID for each one.  
         authors = []
@@ -73,15 +78,23 @@ def get_meta_by_doi(doi):
         # TODO: handle missing data better
         pass
     finally:
-        return {'doi': doi, 'sid': sid, 'authors': authors, 'source': source, 'references': refs, 'raw': response_raw.text}
+        if save_raw:
+            return {'doi': doi, 'sid': sid, 'pmid': pmid, 'authors': authors, 
+                'source': source, 'references': refs, 'raw': response_raw.text}
+        else:
+            return {'doi': doi, 'sid': sid, 'pmid': pmid, 'authors': authors, 
+                'source': source, 'references': refs, 'raw': ''}
 
-def get_meta_by_scopus(sid):
+# TODO: get_meta_by_pmid
+
+def get_meta_by_scopus(sid, save_raw = True):
     '''
     Retrieve metadata for a single paper from Scopus given its Scopus ID
     :param sid: The paper's Scopus ID
     :return: A dict of metadata:
         'doi': The paper's DOI
         'sid': The paper's Scopus ID
+        'pmid': The paper's PubMed ID
         'authors': The paper's authors, as a list of Scopus author IDs
         'source': The journal, etc., the paper was published in, as a Scopus source ID
         'references': The paper's references, as a list of Scopus IDs
@@ -100,12 +113,14 @@ def get_meta_by_scopus(sid):
     # Set default values in case of missing data
     doi = ''
     sid = ''
+    pmid = ''
     authors = []
     source = ''
     refs = []
     try:
         doi = response['abstracts-retrieval-response']['coredata']['prism:doi']
         #print doi
+        pmid = response['abstracts-retrieval-response']['coredata']['pubmed-id']
         authors = []
         authors_resp = response['abstracts-retrieval-response']['authors']['author']
         #return authors_resp
@@ -127,119 +142,199 @@ def get_meta_by_scopus(sid):
         # TODO: Handle missing data better
         pass
     finally:
-        return {'doi': doi, 'sid': sid, 'authors': authors, 'source': source, 'references': refs, 'raw': response_raw.text}
-
-def get_dois_by_issn(issn, after = '2004', before = '2016'):
-    # TODO: replace with the pubmed version from temp.py
+        if save_raw:
+            return {'doi': doi, 'sid': sid, 'pmid': pmid, 'authors': authors, 
+                'source': source, 'references': refs, 'raw': response_raw.text}
+        else:
+            return {'doi': doi, 'sid': sid, 'pmid': pmid, 'authors': authors, 
+                'source': source, 'references': refs, 'raw': ''}
+                
+def get_meta_by_pmid(pmid, save_raw = True):
     '''
-    Retrieve DOIs for every article published in the source with the given ISSN
-    :param issn: The source's ISSN
-    :param after: Lower bound (exclusive) on publication year
-    :param before: Upper bound (exclusive) on publication year
-    
-    :return: A list of DOIs
+    Retrieve metadata for a single paper from Scopus given its PubMed ID
+    :param pmid: The paper's PubMed ID
+    :return: A dict of metadata:
+        'doi': The paper's DOI
+        'sid': The paper's Scopus ID
+        'pmid': The paper's PubMed ID
+        'authors': The paper's authors, as a list of Scopus author IDs
+        'source': The journal, etc., the paper was published in, as a Scopus source ID
+        'references': The paper's references, as a list of Scopus IDs
+        'raw': The raw XML response from the server
     '''
-    max_per_page = 200
-    # First search, to get the total number of papers and pages
-    base_query = 'http://api.elsevier.com/content/search/scopus?'
-    # Search string:  
-	# (ISBN(issn) OR ISSN(issn)) AND PUBYEAR > after AND PUBYEAR < before			
-    search_string = ('query=' + 
-        '(' + 
-            'ISBN(' + issn + ')' + '%20OR%20' + 
-            'ISSN(' + issn + ')' #+ 
-        ')' + '%20AND%20' + 
-        'PUBYEAR%20%3E%20' + after + '%20AND%20' + 
-        'PUBYEAR%20%3C%20' + before
-        )
-    query = (base_query + search_string + '&' +
-                # We only need the DOI
-                'field=doi' + '&' + 
-                'httpAccept=application%2Fjson' + '&' +
-                'apiKey=' + MY_API_KEY)
-    response_raw = requests.get(query + '&count=1')
-    response = json.loads(response_raw.text)
+    # This function should work pretty much just like `get_meta_by_doi`.  
+    # And I'm too lazy to copy and paste the documentation from there to here.
+    #print 'getting metadata for Scopus ID ' + sid
+    base_query = 'http://api.elsevier.com/content/abstract/pubmed_id/'
+    query = base_query + pmid + '?' + 'apiKey=' + MY_API_KEY
+    response_raw = requests.get(query, headers = {'X-ELS-APIKey': MY_API_KEY})
+    #print 'received response'
+    response = xmltodict.parse(response_raw.text)
+    #print 'parsed to dict'
+    # return response
+    # Set default values in case of missing data
+    doi = ''
+    sid = ''
+    authors = []
+    source = ''
+    refs = []
     try:
-        total_papers = int(response['search-results']['opensearch:totalResults'])
+        doi = response['abstracts-retrieval-response']['coredata']['prism:doi']
+        #print doi
+        sid = response['abstracts-retrieval-response']['coredata']['dc:identifier']
+        sid = sid.split(':')[1]
+        #print sid
+        authors = []
+        authors_resp = response['abstracts-retrieval-response']['authors']['author']
+        #return authors_resp
+        for author in authors_resp:
+            authors += [author['@auid']]
+        #print authors
+        if 'prism:isbn' in response['abstracts-retrieval-response']['coredata']:
+            source = response['abstracts-retrieval-response']['coredata']['prism:isbn']
+        else:
+            source = response['abstracts-retrieval-response']['coredata']['prism:issn']
+        #print source
+        refs = []
+        if response['abstracts-retrieval-response']['item']['bibrecord']['tail'] is not None:
+            refs_response = response['abstracts-retrieval-response']['item']['bibrecord']['tail']['bibliography']['reference']
+            for ref in refs_response:
+                refs += [ref['ref-info']['refd-itemidlist']['itemid']['#text']]
+        #print refs
     except KeyError:
-        print(issn)
-        raise
-    total_pages = ceil(total_papers / max_per_page)
-    #return(total_pages)
-    dois = []
-    for page in range(total_pages):
-        start_at = max_per_page * page
-        this_query = (query + '&' + 
-                            'start=' + str(start_at) + '&' +
-                            'count=' + str(max_per_page))
-        #print(this_query)
-        response_raw = requests.get(this_query)
+        # TODO: Handle missing data better
+        pass
+    finally:
+        if save_raw:
+            return {'doi': doi, 'sid': sid, 'pmid': pmid, 'authors': authors, 
+                'source': source, 'references': refs, 'raw': response_raw.text}
+        else:
+            return {'doi': doi, 'sid': sid, 'pmid': pmid, 'authors': authors, 
+                'source': source, 'references': refs, 'raw': ''}
+
+def get_pmids_by_issn(issn, since = '2010', until = '2015'):
+    # TODO: documentation
+    '''
+    Use a PubMed query to retrieve the list of every item published in the given source
+    :param issn: The source's ISSN
+    :param since: Lower bound (exclusive) on publication year
+    :param until: Upper bound (exclusive) on publication year
+    
+    :return: A list of PubMed IDs
+    '''
+    # First deal with a degenerate case
+    if issn == '':
+        return([])
+    # Build the PubMed query
+    # Start with the base URL of the API
+    base_query = 'http://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?'
+    # Build the search string.  
+    # Note that PubMed expects ISSNs with the form NNNN-NNNN
+    # TODO: handle ISBNs
+    if len(issn) != 8:
+        return([])
+    search_string = ('term=' + issn[:4] + '-' + issn[4:] + '&' + 
+        'field=journal' + '&' + 
+        'mindate=' + since + '&' +
+        'maxdate=' + until)
+    retmax = 100000    # Max no. of items to return; PubMed's max is 100k
+    query = (base_query + 'retmax=' + str(retmax) + '&' + 
+                # Get the results in json
+                'retmode=json' + '&' +
+                search_string)
+    try:
+        # Send the request and turn it into json
+        response_raw = requests.get(query)
         response = json.loads(response_raw.text)
-        for entry in response['search-results']['entry']:
-            dois += [entry['prism:doi']]
-    if len(dois) != total_papers:
-        raise ValueError("Number of DOIs retrieved doesn't match total_papers")
-    return(dois)
+        # Get the total number of items
+        total_papers = int(response['esearchresult']['count'])
+    except:
+        # If there's an error, output the query for debugging and pass on the error
+        print(query)
+        raise
+    # Update stdout
+    print('found ' + str(total_papers) + ' items for source ' + issn)
+    # This function assumes we can get everything on one page. 
+    # Raise an error if this isn't the case. 
+    if total_papers > retmax:
+        raise ValueError('more items than PubMed can return on one page')
+    pmids = response['esearchresult']['idlist']
+    return(pmids)
+
+# The following lines retrieve the DOI for each PubMed ID
+# But we need to get the citation data from Scopus anyways, so don't bother with this
+#    max_per_page = 250
+#    total_pages = ceil(total_papers / max_per_page)
+#    base_query = ('http://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?' +
+#        'db=pubmed' + '&' + 'retmode=json' + '&' + 'retmax=' + str(max_per_page))
+#    dois = []
+#    for page in range(total_pages):
+#        try:    
+#            these_pmids = pmids[page * max_per_page : (page+1) * max_per_page]
+#            response_raw = requests.post(base_query, {'id': ','.join(these_pmids)})
+#            response = json.loads(response_raw.text)
+#            articles = response['result']
+#            for pmid in these_pmids:
+#                article = articles[pmid]
+#                for this_id in article['articleids']:
+#                    if this_id['idtype'] == 'doi':
+#                        dois += [this_id['value']]
+#                        break
+#            if len(dois) % 100 == 0:
+#                print(len(dois))
+#        except:
+#            print(page)
+#            print(response_raw.text)
+#            raise
+#    return(dois)
 
 
 start_time = time.time()
 
 # Step 1:  Define core set and retrieve metadata
 
-gen_0_doi = set(['10.1016/j.ntt.2009.06.005', '10.1016/j.neuro.2010.04.001', '10.1007/978-1-61779-170-3_23'])
-#gen_0_doi = set(['10.1007/978-1-61779-170-3_23'])
+core_doi = set(['10.1016/j.ntt.2009.06.005', '10.1016/j.neuro.2010.04.001', '10.1007/978-1-61779-170-3_23'])
+#core_doi = set(['10.1007/978-1-61779-170-3_23'])
 
-print(str(len(gen_0_doi)) + ' items in generation 0')
-print('Retrieving metadata for generation 0')
-gen_0 = []
-gen_n1_sid = []
-for doi in gen_0_doi:
-    meta = get_meta_by_doi(doi)
+print(str(len(core_doi)) + ' items in core set')
+print('Retrieving metadata for core set')
+core = []
+ancestors_sid = []
+for doi in core_doi:
+    # TODO: throttle
+    meta = get_meta_by_doi(doi, save_raw=False)
     meta['core'] = True
-    gen_0 += [meta]
-    gen_n1_sid += meta['references']
-    if len(gen_0) % 25 == 0:
-        print(len(gen_0))
-gen_n1_sid = set(gen_n1_sid)
+    core += [meta]
+    ancestors_sid += meta['references']
+    if len(core) % 25 == 0:
+        print(len(core))
+ancestors_sid = set(ancestors_sid)
     
 
-# Step 2:  Two generations of backwards search
+# Step 2:  One generation backwards search
 
-print(str(len(gen_n1_sid)) + ' items in generation -1')
-print('Retrieving metadata for generation -1')
-gen_n1 = []
-gen_n2_sid = []
-for sid in gen_n1_sid:
-    meta = get_meta_by_scopus(sid)
+print(str(len(ancestors_sid)) + ' items in ancestors')
+print('Retrieving metadata for ancestors')
+ancestors = []
+for sid in ancestors_sid:
+    # TODO: throttle
+    meta = get_meta_by_scopus(sid, save_raw=False)
     meta['core'] = False
-    gen_n1 += [meta]
-    gen_n2_sid += meta['references']
-    if len(gen_n1) % 25 == 0:
-        print(len(gen_n1))
-gen_n2_sid = set(gen_n2_sid)
+    ancestors += [meta]
+    if len(ancestors) % 25 == 0:
+        print(len(ancestors))
 
-print(str(len(gen_n2_sid)) + ' items in generation -2')
-gen_n2 = []
-#print('Retrieving metadata for generation -2')
-#for sid in gen_n2_sid:
-#    meta = get_meta_by_scopus(sid)
-#    meta['core'] = False
-#    gen_n2 += [meta]
-#    if len(gen_n2) % 100 == 0:
-#        print(len(gen_n2))
-
-core_ancestors = gen_0 + gen_n1 + gen_n2
+core_ancestors = core + ancestors
 
 print()
-print('Totals for core set and ancestors:')
-print('Gen 0: ' + str(len(gen_0)))
-print('Gen -1: ' + str(len(gen_n1)))
-print('Gen -2: ' + str(len(gen_n2)))
+print('Totals:')
+print('Core set: ' + str(len(core)))
+print('Ancestors: ' + str(len(ancestors)))
 print()
 
 
 # Step 3:  Get complete list of sources
-print('Collating sources for core set and ancestors:')
+print('Collating sources')
 sources = []
 for paper in core_ancestors:
 #for paper in papers:
@@ -251,24 +346,45 @@ for paper in core_ancestors:
         sources += [this_source[0]]
 sources = set(sources)
 print(str(len(sources)) + ' distinct sources')
+print()
 
 
-# Step 4:  Get all articles in sources for 2005-2015
+# Step 4:  Get all articles in sources for 2010-2015
 
-print('Getting DOIs for each source')
-extended_set_dois = []
+print('Getting PubMed IDs for each source')
+extended_set_pmids = []
 for source in sources:
-    new_dois = get_dois_by_issn(source)
-    extended_set_dois += new_dois
-core_ancestor_dois = []
+    # PLoS One is too big
+    # TODO: note exclusion of PLoS One from network
+    if source == '19326203':
+        continue
+    # Internal to this loop, new_pmids contains the PubMed IDs for an individual source
+    new_pmids = get_pmids_by_issn(source)
+    extended_set_pmids += new_pmids
+core_ancestor_pmids = []
 for paper in core_ancestors:
-    core_ancestor_dois += [paper['doi']]
-new_dois = set(extended_set_dois) - set(core_ancestor_dois)
+    core_ancestor_pmids += [paper['pmid']]
+# NB After the next line, new_pmids contains the PubMed IDs for which we don't already have metadata
+new_pmids = set(extended_set_pmids) - set(core_ancestor_pmids)
+print('Total ' + str(len(new_pmids)) + ' new items')
+print()
+
+# Step 5:  Get metadata for everything in new_pmids
+
+extended_set = []
+for pmid in list(new_pmids)[:1000]:
+#for pmid in new_pmids:
+    # TODO: throttle
+    meta = get_meta_by_pmid(pmid, save_raw=False)
+    meta['core'] = False
+    extended_set += [meta]
+    if len(extended_set) % 300 == 0:
+        print(len(extended_set))
 
 
-# Step 5:  Write everything into a json file
+# Step 6:  Write everything into a json file
 # TODO: for memory management reasons, save raw xml separately from everything else
-all_papers = gen_0 + gen_n1 + gen_n2
+all_papers = core_ancestors + extended_set
 outfile = 'papers.json'
 with open(outfile, 'w') as out:
     json.dump(all_papers, out)
