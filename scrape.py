@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from collections import OrderedDict
 import requests
 import json
 #from math import ceil
@@ -8,9 +9,74 @@ import time
 MY_API_KEY = '1f271dd2cf40387ab1d7e4645d36f599'
 #MY_API_KEY = '6492f9c867ddf3e84baa10b5971e3e3d'
 
-# Metadata to gather:  DOI, Scopus ID, author IDs, source ID, references
-
 # TODO: handle timeouts exception ReadTimeout
+
+def _parse_scopus_metadata(response_raw):
+    '''
+    Given the requests.response, parse the XML metadata.
+    Metadata to gather:  DOI, Scopus ID, author IDs, source ID, references.
+    '''
+    # Convert the xml response to a dict to make it easier to parse
+    response = xmltodict.parse(response_raw.text)
+    #print 'parsed to dict'
+    # The locations of these metadata are given in the Scopus XML documentation
+    # http://ebrp.elsevier.com/pdf/Scopus_Custom_Data_Documentation_v4.pdf
+    # If a field is missing, the dict raises a KeyError or TypeError ('NoneType' object is not subscriptable), and so we use a blank instead
+    try:
+        doi = response['abstracts-retrieval-response']['coredata']['prism:doi']
+    except KeyError:
+        doi = ''
+    #print doi
+    try:
+        # The content for `dc:identifier` looks something like 'Scopus:115628'        
+        sid = response['abstracts-retrieval-response']['coredata']['dc:identifier']
+        sid = sid.split(':')[1]
+        #print sid
+    except KeyError:
+        sid = ''
+    #print sid
+    try:
+        pmid = response['abstracts-retrieval-response']['coredata']['pubmed-id']
+    except KeyError:
+        pmid = ''
+    try:
+        authors = []
+        authors_resp = response['abstracts-retrieval-response']['authors']['author']
+        # If there's only one <author>, xmltodict parses the contents to an OrderedDict
+        if type(authors_resp) is OrderedDict:
+            authors += [authors_resp['@auid']]
+        # But if there are several <author>s, xmltodict produces a list of 
+        #    OrderedDicts, one for each author
+        elif type(authors_resp) is list:
+            for author in authors_resp:
+                #print(author['@auid'])
+                authors += [author['@auid']]
+        else:
+            raise ValueError('Problem parsing authors for doi ' + doi)
+    except KeyError:
+        authors = []
+    #print authors
+    try:
+        if 'prism:isbn' in response['abstracts-retrieval-response']['coredata']:
+            source = response['abstracts-retrieval-response']['coredata']['prism:isbn']
+        else:
+            source = response['abstracts-retrieval-response']['coredata']['prism:issn']
+    except KeyError:
+        source = ''
+    #print source
+    try:
+        refs_response = response['abstracts-retrieval-response']['item']['bibrecord']['tail']['bibliography']['reference']
+        refs = []
+        for ref in refs_response:
+            refs += [ref['ref-info']['refd-itemidlist']['itemid']['#text']]
+    except KeyError:
+        refs = []
+    except TypeError:
+        refs = []
+    #print refs
+    return {'doi': doi, 'sid': sid, 'pmid': pmid, 'authors': authors, 
+                'source': source, 'references': refs}
+
 
 def get_meta_by_doi(doi, save_raw = True):
     '''
@@ -30,62 +96,14 @@ def get_meta_by_doi(doi, save_raw = True):
     base_query = 'http://api.elsevier.com/content/abstract/doi/'
     query = base_query + doi + '?' + 'apiKey=' + MY_API_KEY
     response_raw = requests.get(query, headers = {'X-ELS-APIKey': MY_API_KEY})
-    #print 'received response'
-    # Convert the xml response to a dict to make it easier to parse
-    response = xmltodict.parse(response_raw.text)
-    #print 'parsed to dict'
-    # Set default values in case of missing data
-    doi = ''
-    sid = ''
-    pmid = ''
-    authors = []
-    source = ''
-    refs = []
-    try:
-        # The locations of these metadata are given in the Scopus XML documentation
-        # http://ebrp.elsevier.com/pdf/Scopus_Custom_Data_Documentation_v4.pdf
-        # The content for `dc:identifier` looks something like 'Scopus:115628'        
-        sid = response['abstracts-retrieval-response']['coredata']['dc:identifier']
-        sid = sid.split(':')[1]
-        #print sid
-        pmid = response['abstracts-retrieval-response']['coredata']['pubmed-id']
-        # `authors_resp` grabs a list of dicts, one for each author
-        # We're only grabbing the Scoupus ID for each one.  
-        authors = []
-        authors_resp = response['abstracts-retrieval-response']['authors']['author']
-        #return authors_resp
-        for author in authors_resp:
-            authors += [author['@auid']]
-        #print authors
-        if 'prism:isbn' in response['abstracts-retrieval-response']['coredata']:
-            source = response['abstracts-retrieval-response']['coredata']['prism:isbn']
-        else:
-            source = response['abstracts-retrieval-response']['coredata']['prism:issn']
-        #print source
-        # The references work like the authors list
-        refs = []
-        if response['abstracts-retrieval-response']['item']['bibrecord']['tail'] is not None:
-            refs_response = response['abstracts-retrieval-response']['item']['bibrecord']['tail']['bibliography']['reference']
-            for ref in refs_response:
-                refs += [ref['ref-info']['refd-itemidlist']['itemid']['#text']]
-        #print refs
-    except KeyError:
-        # If a field is missing, the dict replies with a KeyError.
-        # We've defined empty defaults above the try statement, so if we catch 
-        # a KeyError we'll just stop and send back whatever we've gotten so far.
-        # This isn't the most elegant want to handle missing fields, since 
-        # one missing field early on (say, sid) causes everything to be empty.
-        # TODO: handle missing data better
-        pass
-    finally:
-        if save_raw:
-            return {'doi': doi, 'sid': sid, 'pmid': pmid, 'authors': authors, 
-                'source': source, 'references': refs, 'raw': response_raw.text}
-        else:
-            return {'doi': doi, 'sid': sid, 'pmid': pmid, 'authors': authors, 
-                'source': source, 'references': refs, 'raw': ''}
-
-# TODO: get_meta_by_pmid
+    # Send the result to the parser    
+    meta = _parse_scopus_metadata(response_raw)
+    # If the call asks us to save the raw response, do so; otherwise add a blank
+    if save_raw:
+        meta['raw'] = response_raw.text
+    else:
+        meta['raw'] = ''
+    return meta
 
 def get_meta_by_scopus(sid, save_raw = True):
     '''
@@ -100,54 +118,19 @@ def get_meta_by_scopus(sid, save_raw = True):
         'references': The paper's references, as a list of Scopus IDs
         'raw': The raw XML response from the server
     '''
-    # This function should work pretty much just like `get_meta_by_doi`.  
-    # And I'm too lazy to copy and paste the documentation from there to here.
-    #print 'getting metadata for Scopus ID ' + sid
+    # This works just like get_meta_by_doi 
     base_query = 'http://api.elsevier.com/content/abstract/scopus_id/'
     query = base_query + sid + '?' + 'apiKey=' + MY_API_KEY
+    #print(query)
     response_raw = requests.get(query, headers = {'X-ELS-APIKey': MY_API_KEY})
     #print 'received response'
-    response = xmltodict.parse(response_raw.text)
-    #print 'parsed to dict'
-    # return response
-    # Set default values in case of missing data
-    doi = ''
-    sid = ''
-    pmid = ''
-    authors = []
-    source = ''
-    refs = []
-    try:
-        doi = response['abstracts-retrieval-response']['coredata']['prism:doi']
-        #print doi
-        pmid = response['abstracts-retrieval-response']['coredata']['pubmed-id']
-        authors = []
-        authors_resp = response['abstracts-retrieval-response']['authors']['author']
-        #return authors_resp
-        for author in authors_resp:
-            authors += [author['@auid']]
-        #print authors
-        if 'prism:isbn' in response['abstracts-retrieval-response']['coredata']:
-            source = response['abstracts-retrieval-response']['coredata']['prism:isbn']
-        else:
-            source = response['abstracts-retrieval-response']['coredata']['prism:issn']
-        #print source
-        refs = []
-        if response['abstracts-retrieval-response']['item']['bibrecord']['tail'] is not None:
-            refs_response = response['abstracts-retrieval-response']['item']['bibrecord']['tail']['bibliography']['reference']
-            for ref in refs_response:
-                refs += [ref['ref-info']['refd-itemidlist']['itemid']['#text']]
-        #print refs
-    except KeyError:
-        # TODO: Handle missing data better
-        pass
-    finally:
-        if save_raw:
-            return {'doi': doi, 'sid': sid, 'pmid': pmid, 'authors': authors, 
-                'source': source, 'references': refs, 'raw': response_raw.text}
-        else:
-            return {'doi': doi, 'sid': sid, 'pmid': pmid, 'authors': authors, 
-                'source': source, 'references': refs, 'raw': ''}
+    meta = _parse_scopus_metadata(response_raw)
+    if save_raw:
+        meta['raw'] = response_raw.text
+    else:
+        meta['raw'] = ''
+    return meta
+
                 
 def get_meta_by_pmid(pmid, save_raw = True):
     '''
@@ -162,58 +145,19 @@ def get_meta_by_pmid(pmid, save_raw = True):
         'references': The paper's references, as a list of Scopus IDs
         'raw': The raw XML response from the server
     '''
-    # This function should work pretty much just like `get_meta_by_doi`.  
-    # And I'm too lazy to copy and paste the documentation from there to here.
-    #print 'getting metadata for Scopus ID ' + sid
     base_query = 'http://api.elsevier.com/content/abstract/pubmed_id/'
     query = base_query + pmid + '?' + 'apiKey=' + MY_API_KEY
     response_raw = requests.get(query, headers = {'X-ELS-APIKey': MY_API_KEY})
     #print 'received response'
-    response = xmltodict.parse(response_raw.text)
-    #print 'parsed to dict'
-    # return response
-    # Set default values in case of missing data
-    doi = ''
-    sid = ''
-    authors = []
-    source = ''
-    refs = []
-    try:
-        doi = response['abstracts-retrieval-response']['coredata']['prism:doi']
-        #print doi
-        sid = response['abstracts-retrieval-response']['coredata']['dc:identifier']
-        sid = sid.split(':')[1]
-        #print sid
-        authors = []
-        authors_resp = response['abstracts-retrieval-response']['authors']['author']
-        #return authors_resp
-        for author in authors_resp:
-            authors += [author['@auid']]
-        #print authors
-        if 'prism:isbn' in response['abstracts-retrieval-response']['coredata']:
-            source = response['abstracts-retrieval-response']['coredata']['prism:isbn']
-        else:
-            source = response['abstracts-retrieval-response']['coredata']['prism:issn']
-        #print source
-        refs = []
-        if response['abstracts-retrieval-response']['item']['bibrecord']['tail'] is not None:
-            refs_response = response['abstracts-retrieval-response']['item']['bibrecord']['tail']['bibliography']['reference']
-            for ref in refs_response:
-                refs += [ref['ref-info']['refd-itemidlist']['itemid']['#text']]
-        #print refs
-    except KeyError:
-        # TODO: Handle missing data better
-        pass
-    finally:
-        if save_raw:
-            return {'doi': doi, 'sid': sid, 'pmid': pmid, 'authors': authors, 
-                'source': source, 'references': refs, 'raw': response_raw.text}
-        else:
-            return {'doi': doi, 'sid': sid, 'pmid': pmid, 'authors': authors, 
-                'source': source, 'references': refs, 'raw': ''}
+    meta = _parse_scopus_metadata(response_raw)
+    if save_raw:
+        meta['raw'] = response_raw.text
+    else:
+        meta['raw'] = ''
+    return meta
+
 
 def get_pmids_by_issn(issn, since = '2010', until = '2015'):
-    # TODO: documentation
     '''
     Use a PubMed query to retrieve the list of every item published in the given source
     :param issn: The source's ISSN
@@ -368,6 +312,7 @@ for paper in core_ancestors:
 new_pmids = set(extended_set_pmids) - set(core_ancestor_pmids)
 print('Total ' + str(len(new_pmids)) + ' new items')
 print()
+
 
 # Step 5:  Get metadata for everything in new_pmids
 
