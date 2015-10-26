@@ -6,8 +6,7 @@ import json
 import xmltodict
 import time
 
-MY_API_KEY = '1f271dd2cf40387ab1d7e4645d36f599'
-#MY_API_KEY = '6492f9c867ddf3e84baa10b5971e3e3d'
+from api_key import MY_API_KEY
 
 # TODO: handle timeouts exception ReadTimeout
 
@@ -55,6 +54,8 @@ def _parse_scopus_metadata(response_raw):
             raise ValueError('Problem parsing authors for doi ' + doi)
     except KeyError:
         authors = []
+    except TypeError:
+        raise ValueError('Problem parsing authors for doi ' + doi)
     #print authors
     try:
         if 'prism:isbn' in response['abstracts-retrieval-response']['coredata']:
@@ -233,106 +234,3 @@ def get_pmids_by_issn(issn, since = '2010', until = '2015'):
 #    return(dois)
 
 
-start_time = time.time()
-
-# Step 1:  Define core set and retrieve metadata
-
-core_doi = set(['10.1016/j.ntt.2009.06.005', '10.1016/j.neuro.2010.04.001', '10.1007/978-1-61779-170-3_23'])
-#core_doi = set(['10.1007/978-1-61779-170-3_23'])
-
-print(str(len(core_doi)) + ' items in core set')
-print('Retrieving metadata for core set')
-core = []
-ancestors_sid = []
-for doi in core_doi:
-    # TODO: throttle
-    meta = get_meta_by_doi(doi, save_raw=False)
-    meta['core'] = True
-    core += [meta]
-    ancestors_sid += meta['references']
-    if len(core) % 25 == 0:
-        print(len(core))
-ancestors_sid = set(ancestors_sid)
-    
-
-# Step 2:  One generation backwards search
-
-print(str(len(ancestors_sid)) + ' items in ancestors')
-print('Retrieving metadata for ancestors')
-ancestors = []
-for sid in ancestors_sid:
-    # TODO: throttle
-    meta = get_meta_by_scopus(sid, save_raw=False)
-    meta['core'] = False
-    ancestors += [meta]
-    if len(ancestors) % 25 == 0:
-        print(len(ancestors))
-
-core_ancestors = core + ancestors
-
-print()
-print('Totals:')
-print('Core set: ' + str(len(core)))
-print('Ancestors: ' + str(len(ancestors)))
-print()
-
-
-# Step 3:  Get complete list of sources
-print('Collating sources')
-sources = []
-for paper in core_ancestors:
-#for paper in papers:
-    this_source = paper['source']
-    if type(this_source) is str:
-        sources += [this_source]
-    if type(this_source) is list:
-        # Some papers have a list of variant ISBNs rather than a single number
-        sources += [this_source[0]]
-sources = set(sources)
-print(str(len(sources)) + ' distinct sources')
-print()
-
-
-# Step 4:  Get all articles in sources for 2010-2015
-
-print('Getting PubMed IDs for each source')
-extended_set_pmids = []
-for source in sources:
-    # PLoS One is too big
-    # TODO: note exclusion of PLoS One from network
-    if source == '19326203':
-        continue
-    # Internal to this loop, new_pmids contains the PubMed IDs for an individual source
-    new_pmids = get_pmids_by_issn(source)
-    extended_set_pmids += new_pmids
-core_ancestor_pmids = []
-for paper in core_ancestors:
-    core_ancestor_pmids += [paper['pmid']]
-# NB After the next line, new_pmids contains the PubMed IDs for which we don't already have metadata
-new_pmids = set(extended_set_pmids) - set(core_ancestor_pmids)
-print('Total ' + str(len(new_pmids)) + ' new items')
-print()
-
-
-# Step 5:  Get metadata for everything in new_pmids
-
-extended_set = []
-for pmid in list(new_pmids)[:1000]:
-#for pmid in new_pmids:
-    # TODO: throttle
-    meta = get_meta_by_pmid(pmid, save_raw=False)
-    meta['core'] = False
-    extended_set += [meta]
-    if len(extended_set) % 300 == 0:
-        print(len(extended_set))
-
-
-# Step 6:  Write everything into a json file
-# TODO: for memory management reasons, save raw xml separately from everything else
-all_papers = core_ancestors + extended_set
-outfile = 'papers.json'
-with open(outfile, 'w') as out:
-    json.dump(all_papers, out)
-
-finish_time = time.time()
-print('total run time ' + str((finish_time - start_time) / 60) + ' minutes')
