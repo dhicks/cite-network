@@ -1,10 +1,16 @@
 # -*- coding: utf-8 -*-
+'''
+This module defines several functions used to scrape article metadata, 
+primarily from Scopus but also from PubMed.  
+
+Note that these functions need a Scopus API key, defined in `api_key.py`.
+'''
+
 from collections import OrderedDict
 import requests
 import json
 #from math import ceil
 import xmltodict
-import time
 
 from api_key import MY_API_KEY
 

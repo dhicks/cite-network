@@ -1,5 +1,10 @@
 # -*- coding: utf-8 -*-
+'''
+This module uses the functions in the `scrape` module to build the dataset.
+'''
+
 from scrape import *
+import time
 
 # File to save the set of scraped data
 max_sources = 20
