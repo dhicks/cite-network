@@ -119,7 +119,7 @@ for pmid in list(new_pmids)[:1000]:
     meta = get_meta_by_pmid(pmid, save_raw=False)
     meta['core'] = False
     extended_set += [meta]
-    if len(extended_set) % 300 == 0:
+    if len(extended_set) % 100 == 0:
         print(len(extended_set))
 
 

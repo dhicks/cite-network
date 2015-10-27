@@ -10,11 +10,10 @@ from collections import OrderedDict
 import requests
 import json
 #from math import ceil
+import time
 import xmltodict
 
 from api_key import MY_API_KEY
-
-# TODO: handle timeouts exception ReadTimeout
 
 def _parse_scopus_metadata(response_raw):
     '''
@@ -83,6 +82,29 @@ def _parse_scopus_metadata(response_raw):
     #print refs
     return {'doi': doi, 'sid': sid, 'pmid': pmid, 'authors': authors, 
                 'source': source, 'references': refs}
+                
+def _get_query(query):
+    # Timeout for HTTP requests
+    TIMEOUT = 60
+    # Delay, in seconds, after receiving a timeout
+    DELAY = 3*60
+    # Maximum number of attempts to make before throwing an error
+    MAX_ATTEMPTS = 5
+    
+    attempts = 0
+    while (attempts < MAX_ATTEMPTS):
+        attempts += 1
+        try:
+            response_raw = requests.get(query, 
+                            #headers = {'X-ELS-APIKey': MY_API_KEY}, 
+                            timeout = TIMEOUT)
+            return(response_raw)
+        except requests.exceptions.ConnectTimeout:
+            print('Request timed out.  Cooldown for ' + str(DELAY) + ' seconds.')
+            time.sleep(DELAY)
+    else:
+        raise requests.exceptions.ConnectTimeout('Maximum number of requests')
+    
 
 
 def get_meta_by_doi(doi, save_raw = True):
@@ -102,8 +124,8 @@ def get_meta_by_doi(doi, save_raw = True):
     # Build the http query, and send it using `requests`
     base_query = 'http://api.elsevier.com/content/abstract/doi/'
     query = base_query + doi + '?' + 'apiKey=' + MY_API_KEY
-    response_raw = requests.get(query, headers = {'X-ELS-APIKey': MY_API_KEY})
-    # Send the result to the parser    
+    print('\t' + query)
+    response_raw = _get_query(query)
     meta = _parse_scopus_metadata(response_raw)
     # If the call asks us to save the raw response, do so; otherwise add a blank
     if save_raw:
@@ -128,8 +150,8 @@ def get_meta_by_scopus(sid, save_raw = True):
     # This works just like get_meta_by_doi 
     base_query = 'http://api.elsevier.com/content/abstract/scopus_id/'
     query = base_query + sid + '?' + 'apiKey=' + MY_API_KEY
-    #print(query)
-    response_raw = requests.get(query, headers = {'X-ELS-APIKey': MY_API_KEY})
+    print('\t' + query)
+    response_raw = _get_query(query)
     #print 'received response'
     meta = _parse_scopus_metadata(response_raw)
     if save_raw:
@@ -154,7 +176,8 @@ def get_meta_by_pmid(pmid, save_raw = True):
     '''
     base_query = 'http://api.elsevier.com/content/abstract/pubmed_id/'
     query = base_query + pmid + '?' + 'apiKey=' + MY_API_KEY
-    response_raw = requests.get(query, headers = {'X-ELS-APIKey': MY_API_KEY})
+    print('\t' + query)
+    response_raw = _get_query(query)
     #print 'received response'
     meta = _parse_scopus_metadata(response_raw)
     if save_raw:
@@ -193,9 +216,9 @@ def get_pmids_by_issn(issn, since = '2010', until = '2015'):
                 # Get the results in json
                 'retmode=json' + '&' +
                 search_string)
+    print('\t' + query)
     try:
-        # Send the request and turn it into json
-        response_raw = requests.get(query)
+        response_raw = _get_query(query)
         response = json.loads(response_raw.text)
         # Get the total number of items
         total_papers = int(response['esearchresult']['count'])
