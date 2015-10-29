@@ -19,6 +19,15 @@ def _parse_scopus_metadata(response_raw):
     '''
     Given the requests.response, parse the XML metadata.
     Metadata to gather:  DOI, Scopus ID, author IDs, source ID, references.
+    :param response_raw: XML metadata, retrieved from Scopus using requests.get
+    :return: A dict of metadata:
+        'doi': The paper's DOI
+        'sid': The paper's Scopus ID
+        'pmid': The paper's PubMed ID
+        'authors': The paper's authors, as a list of Scopus author IDs
+        'source': The journal, etc., the paper was published in, as a Scopus source ID
+        'references': The paper's references, as a list of Scopus IDs
+        'raw': The raw XML response from the server
     '''
     # Convert the xml response to a dict to make it easier to parse
     response = xmltodict.parse(response_raw.text)
@@ -26,6 +35,9 @@ def _parse_scopus_metadata(response_raw):
     # The locations of these metadata are given in the Scopus XML documentation
     # http://ebrp.elsevier.com/pdf/Scopus_Custom_Data_Documentation_v4.pdf
     # If a field is missing, the dict raises a KeyError or TypeError ('NoneType' object is not subscriptable), and so we use a blank instead
+    if 'service-error' in response:
+        print(response)
+        raise ValueError('Service error in query response')
     try:
         doi = response['abstracts-retrieval-response']['coredata']['prism:doi']
     except KeyError:
@@ -60,7 +72,8 @@ def _parse_scopus_metadata(response_raw):
     except KeyError:
         authors = []
     except TypeError:
-        raise ValueError('Problem parsing authors for doi ' + doi)
+        authors = []
+        #raise ValueError('Problem parsing authors for doi ' + doi)
     #print authors
     try:
         if 'prism:isbn' in response['abstracts-retrieval-response']['coredata']:
@@ -84,6 +97,11 @@ def _parse_scopus_metadata(response_raw):
                 'source': source, 'references': refs}
                 
 def _get_query(query):
+    '''
+    Get an HTTP query, with some wrapping to handle timeouts.
+    :param query: The HTTP query string
+    :return: The requests.get response
+    '''
     # Timeout for HTTP requests
     TIMEOUT = 60
     # Delay, in seconds, after receiving a timeout
@@ -99,11 +117,11 @@ def _get_query(query):
                             #headers = {'X-ELS-APIKey': MY_API_KEY}, 
                             timeout = TIMEOUT)
             return(response_raw)
-        except requests.exceptions.ConnectTimeout:
+        except requests.exceptions.Timeout:
             print('Request timed out.  Cooldown for ' + str(DELAY) + ' seconds.')
             time.sleep(DELAY)
     else:
-        raise requests.exceptions.ConnectTimeout('Maximum number of requests')
+        raise requests.exceptions.Timeout('Maximum number of requests')
     
 
 
