@@ -3,6 +3,7 @@
 This module uses the functions in the `scrape` module to build the dataset.
 '''
 
+import csv
 from scrape import *
 import time
 
@@ -15,9 +16,19 @@ start_time = time.time()
 
 # Step 1:  Define core set and retrieve metadata
 
+# Some test DOIs
 #core_doi = set(['10.1007/978-1-61779-170-3_23'])
 #core_doi = set(['10.1016/j.ntt.2009.06.005', '10.1016/j.neuro.2010.04.001', '10.1007/978-1-61779-170-3_23'])
-core_doi = ['10.14573/altex.2012.2.202', '10.1016/j.reprotox.2011.11.111', '10.14573/altex.2011.1.009', '10.1016/j.neuro.2012.05.012', '10.1016/j.neuro.2012.10.013', '10.1016/j.taap.2011.02.013', '10.1016/j.tiv.2010.10.011', '10.1016/j.pbb.2012.12.010', '10.1016/j.neuro.2013.02.006', '10.1016/j.neuro.2013.11.008', '10.1002/9781118102138.ch12', '10.1016/j.neuro.2012.05.001', '10.3389/fneng.2011.00004', '10.1016/B978-0-12-382032-7.10015-3', '10.3389/fneng.2011.00001', '10.1016/j.neuro.2014.06.012', '10.1093/toxsci/kfr185', '10.1016/j.ntt.2011.06.007', '10.1016/j.neuro.2008.02.011', '10.1093/toxsci/kfn114', '10.1093/toxsci/kfn115', '10.1016/j.ntt.2009.06.003', '10.1016/j.tox.2010.02.004', '10.1016/j.neuro.2010.02.003', '10.1016/j.ntt.2009.06.005', '10.1016/j.neuro.2010.04.001', '10.1007/978-1-61779-170-3_23', '10.1111/j.1741-4520.2012.00377.x', '10.1002/stem.1201', '10.1016/j.neuro.2008.09.011', '10.1016/j.ntt.2009.04.066', '10.1016/j.ntt.2009.04.065', '10.1016/j.aquatox.2011.05.017', '10.1016/j.ntt.2011.08.005']
+#core_doi = ['10.14573/altex.2012.2.202', '10.1016/j.reprotox.2011.11.111', '10.14573/altex.2011.1.009', '10.1016/j.neuro.2012.05.012', '10.1016/j.neuro.2012.10.013', '10.1016/j.taap.2011.02.013', '10.1016/j.tiv.2010.10.011', '10.1016/j.pbb.2012.12.010', '10.1016/j.neuro.2013.02.006', '10.1016/j.neuro.2013.11.008', '10.1002/9781118102138.ch12', '10.1016/j.neuro.2012.05.001', '10.3389/fneng.2011.00004', '10.1016/B978-0-12-382032-7.10015-3', '10.3389/fneng.2011.00001', '10.1016/j.neuro.2014.06.012', '10.1093/toxsci/kfr185', '10.1016/j.ntt.2011.06.007', '10.1016/j.neuro.2008.02.011', '10.1093/toxsci/kfn114', '10.1093/toxsci/kfn115', '10.1016/j.ntt.2009.06.003', '10.1016/j.tox.2010.02.004', '10.1016/j.neuro.2010.02.003', '10.1016/j.ntt.2009.06.005', '10.1016/j.neuro.2010.04.001', '10.1007/978-1-61779-170-3_23', '10.1111/j.1741-4520.2012.00377.x', '10.1002/stem.1201', '10.1016/j.neuro.2008.09.011', '10.1016/j.ntt.2009.04.066', '10.1016/j.ntt.2009.04.065', '10.1016/j.aquatox.2011.05.017', '10.1016/j.ntt.2011.08.005']
+
+# Get the DOIs from the CSV retrieved manually from Scopus
+infile = 'gen_1 2015-10-30.csv'
+dois = []
+with open(infile) as readfile:
+    csvreader = csv.reader(readfile)
+    for row in csvreader:
+        doi = row[0]
+        dois += [doi]
 
 print(str(len(core_doi)) + ' items in core set')
 print('Retrieving metadata for core set')
@@ -26,6 +37,7 @@ ancestors_sid = []
 for doi in core_doi:
     # TODO: throttle
     meta = get_meta_by_doi(doi, save_raw=False)
+    # TODO: read in CSS DOIs separately and add 'core' once we've retrieved generation 0
     meta['core'] = True
     core += [meta]
     ancestors_sid += meta['references']
@@ -34,7 +46,7 @@ for doi in core_doi:
 ancestors_sid = set(ancestors_sid)
     
 
-# Step 2:  One generation backwards search
+# Step 2:  Two generation backwards search
 
 print(str(len(ancestors_sid)) + ' items in ancestors')
 print('Retrieving metadata for ancestors')
@@ -46,6 +58,8 @@ for sid in ancestors_sid:
     ancestors += [meta]
     if len(ancestors) % 25 == 0:
         print(len(ancestors))
+        
+# TODO: the above gets generation 0; do the same for generation -1
 
 core_ancestors = core + ancestors
 
