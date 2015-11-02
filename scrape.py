@@ -15,6 +15,7 @@ import xmltodict
 
 from api_key import MY_API_KEY
 
+# TODO: also grab publication year
 def _parse_scopus_metadata(response_raw):
     '''
     Given the requests.response, parse the XML metadata.
@@ -32,12 +33,18 @@ def _parse_scopus_metadata(response_raw):
     # Convert the xml response to a dict to make it easier to parse
     response = xmltodict.parse(response_raw.text)
     #print 'parsed to dict'
+    # This branch catches error codes in the response
+    if 'service-error' in response:
+        # If the resource isn't found, we'll just get a bunch of key errors and can return an empty set of metadata
+        if response['service-error']['status']['statusCode'] == 'RESOURCE_NOT_FOUND':
+            print('Resource not found error')
+        # If something else is going on, raise an exception
+        else:
+            print(response)
+            raise ValueError('Service error in query response')
     # The locations of these metadata are given in the Scopus XML documentation
     # http://ebrp.elsevier.com/pdf/Scopus_Custom_Data_Documentation_v4.pdf
     # If a field is missing, the dict raises a KeyError or TypeError ('NoneType' object is not subscriptable), and so we use a blank instead
-    if 'service-error' in response:
-        print(response)
-        raise ValueError('Service error in query response')
     try:
         doi = response['abstracts-retrieval-response']['coredata']['prism:doi']
     except KeyError:

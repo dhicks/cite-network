@@ -4,144 +4,137 @@ This module uses the functions in the `scrape` module to build the dataset.
 '''
 
 import csv
+import random
 from scrape import *
 import time
 
 # File to save the set of scraped data
-max_sources = 20
-outfile = 'papers.json'
-
+#max_sources = 20
+outfile = 'papers.test.json'
 
 start_time = time.time()
 
+
+
 # Step 1:  Define core set and retrieve metadata
 
-# Some test DOIs
-#core_doi = set(['10.1007/978-1-61779-170-3_23'])
-#core_doi = set(['10.1016/j.ntt.2009.06.005', '10.1016/j.neuro.2010.04.001', '10.1007/978-1-61779-170-3_23'])
-#core_doi = ['10.14573/altex.2012.2.202', '10.1016/j.reprotox.2011.11.111', '10.14573/altex.2011.1.009', '10.1016/j.neuro.2012.05.012', '10.1016/j.neuro.2012.10.013', '10.1016/j.taap.2011.02.013', '10.1016/j.tiv.2010.10.011', '10.1016/j.pbb.2012.12.010', '10.1016/j.neuro.2013.02.006', '10.1016/j.neuro.2013.11.008', '10.1002/9781118102138.ch12', '10.1016/j.neuro.2012.05.001', '10.3389/fneng.2011.00004', '10.1016/B978-0-12-382032-7.10015-3', '10.3389/fneng.2011.00001', '10.1016/j.neuro.2014.06.012', '10.1093/toxsci/kfr185', '10.1016/j.ntt.2011.06.007', '10.1016/j.neuro.2008.02.011', '10.1093/toxsci/kfn114', '10.1093/toxsci/kfn115', '10.1016/j.ntt.2009.06.003', '10.1016/j.tox.2010.02.004', '10.1016/j.neuro.2010.02.003', '10.1016/j.ntt.2009.06.005', '10.1016/j.neuro.2010.04.001', '10.1007/978-1-61779-170-3_23', '10.1111/j.1741-4520.2012.00377.x', '10.1002/stem.1201', '10.1016/j.neuro.2008.09.011', '10.1016/j.ntt.2009.04.066', '10.1016/j.ntt.2009.04.065', '10.1016/j.aquatox.2011.05.017', '10.1016/j.ntt.2011.08.005']
-
-# Get the DOIs from the CSV retrieved manually from Scopus
+# Get the DOIs manually retrieved from Scopus
 infile = 'gen_1 2015-10-30.csv'
-dois = []
+gen_1_doi = []
 with open(infile) as readfile:
     csvreader = csv.reader(readfile)
+    # Skip the header row
+    next(csvreader)
     for row in csvreader:
-        doi = row[0]
-        dois += [doi]
+        this_doi = row[0]
+        gen_1_doi += [this_doi]
+        # The next two lines limit how many DOIs we read, for debugging
+        if len(gen_1_doi) >= 1:
+            break
 
-print(str(len(core_doi)) + ' items in core set')
-print('Retrieving metadata for core set')
-core = []
-ancestors_sid = []
-for doi in core_doi:
+print(str(len(gen_1_doi)) + ' items in generation +1')
+print('Retrieving metadata for generation +1')
+gen_1 = []
+gen_1_sid = []
+gen_0_sid = []
+for doi in gen_1_doi:
+    # Skip empty DOIs
+    if doi == '':
+        continue
     # TODO: throttle
     meta = get_meta_by_doi(doi, save_raw=False)
-    # TODO: read in CSS DOIs separately and add 'core' once we've retrieved generation 0
-    meta['core'] = True
-    core += [meta]
-    ancestors_sid += meta['references']
-    if len(core) % 25 == 0:
-        print(len(core))
-ancestors_sid = set(ancestors_sid)
+    gen_1 += [meta]
+    gen_1_sid += [meta['sid']]
+    gen_0_sid += meta['references']
+    if len(gen_1) % 25 == 0:
+        print(len(gen_1))
+# Remove all of the SIDs that we've already scraped
+# At the same time, make it a set to remove redundancies
+gen_1_sid = set(gen_1_sid)
+gen_0_sid = {sid for sid in gen_0_sid if sid not in gen_1_sid}
     
+
 
 # Step 2:  Two generation backwards search
 
-print(str(len(ancestors_sid)) + ' items in ancestors')
-print('Retrieving metadata for ancestors')
-ancestors = []
-for sid in ancestors_sid:
+print(str(len(gen_0_sid)) + ' items in generation 0')
+print('Retrieving metadata for generation 0')
+gen_0 = []
+gen_n1_sid = []
+for sid in gen_0_sid:
+    # Skip empty SIDs
+    if sid == '':
+        continue
     # TODO: throttle
     meta = get_meta_by_scopus(sid, save_raw=False)
-    meta['core'] = False
-    ancestors += [meta]
-    if len(ancestors) % 25 == 0:
-        print(len(ancestors))
-        
-# TODO: the above gets generation 0; do the same for generation -1
+    #meta['core'] = False
+    gen_0 += [meta]
+    gen_n1_sid += meta['references']
+    if len(gen_0) % 25 == 0:
+        print(len(gen_0))
+all_papers = gen_1 + gen_0
+all_papers_sid = gen_1_sid | gen_0_sid
+gen_n1_sid = {sid for sid in gen_n1_sid if sid not in all_papers_sid}
 
-core_ancestors = core + ancestors
+print(str(len(gen_n1_sid)) + ' items in generation -1')
+print('Retrieving metadata for generation -1')
+gen_n1 = []
+# Swap comments on the next two lines to grab only a subset of generation -1
+for sid in gen_n1_sid:
+#for sid in list(gen_n1_sid)[:100]:
+    # Skip empty SIDs
+    if sid == '':
+        continue
+    # TODO: throttle
+    meta = get_meta_by_scopus(sid, save_raw=False)
+    #meta['core'] = False
+    gen_n1 += [meta]
+    if len(gen_n1) % 25 == 0:
+        print(len(gen_n1))
+all_papers = all_papers + gen_n1
+all_papers_sid = all_papers_sid | gen_n1_sid
+
 
 print()
 print('Totals:')
-print('Core set: ' + str(len(core)))
-print('Ancestors: ' + str(len(ancestors)))
+print('Generation +1: ' + str(len(gen_1)))
+print('Generation 0: ' + str(len(gen_0)))
+print('Generation -1: ' + str(len(gen_n1)))
+print('All papers: ' + str(len(all_papers)))
 print()
 
 
-# Step 3:  Get complete list of sources
-# Get the sources as a dict, with the number of entries in core_ancestores
-print('Collating sources')
-sources = {}
-for paper in core_ancestors:
-    this_source = paper['source']
-    if type(this_source) is list:
-        # Some papers have a list of variant ISBNs, not a single number
-        this_source = this_source[0]
-    if this_source not in sources:
-        sources[this_source] = 1
-    else:
-        sources[this_source] = +1
-print(str(len(sources)) + ' distinct sources')
 
-# Sort by number of entries
-sorted_sources = sorted(sources, key=sources.get, reverse=True)
-# Drop the empty value
-sorted_sources.remove('')
-# And subset to the desired number of sources
-target_sources = sorted_sources[:max_sources]
+# Step 3: Load the list of core set DOIs and set metadata appropriately
 
-print('Target sources cover ' + 
-    str(
-        round(
-        sum([sources[source] for source in sources if source in target_sources])/
-        sum([sources[source] for source in sources]) * 100
-        )) +
-    '% of core and ancestors')
-    
+infile = 'css_dois.txt'
+with open(infile) as readfile:
+	readdata = readfile.read()
+core_doi = readdata.split(', ')
 
-
-
-# Step 4:  Get all articles in sources for 2010-2015
-
-print('Getting PubMed IDs for target sources')
-extended_set_pmids = []
-for source in target_sources:
-    # PLoS One is too big
-    # TODO: note exclusion of PLoS One from network
-    if source == '19326203':
-        continue
-    # Internal to this loop, new_pmids contains the PubMed IDs for an individual source
-    new_pmids = get_pmids_by_issn(source)
-    extended_set_pmids += new_pmids
-core_ancestor_pmids = []
-for paper in core_ancestors:
-    core_ancestor_pmids += [paper['pmid']]
-# NB After the next line, new_pmids contains the PubMed IDs for which we don't already have metadata
-new_pmids = set(extended_set_pmids) - set(core_ancestor_pmids)
-print('Total ' + str(len(new_pmids)) + ' new items')
+for paper in all_papers:
+	paper['core'] = (paper['doi'] in core_doi)
+	
+core_set = [paper for paper in all_papers if paper['core']]
+print('Core set: ' + str(len(core_set)))
 print()
 
 
-# Step 5:  Get metadata for everything in new_pmids
 
-extended_set = []
-for pmid in list(new_pmids)[:1000]:
-#for pmid in new_pmids:
-    # TODO: throttle
-    meta = get_meta_by_pmid(pmid, save_raw=False)
-    meta['core'] = False
-    extended_set += [meta]
-    if len(extended_set) % 100 == 0:
-        print(len(extended_set))
-
-
-# Step 6:  Write everything into a json file
+# Step 4:  Write everything into a json file
 # TODO: for memory management reasons, save raw xml separately from everything else
-all_papers = core_ancestors + extended_set
 with open(outfile, 'w') as out:
     json.dump(all_papers, out)
 
 finish_time = time.time()
-print('total run time ' + str((finish_time - start_time) / 60) + ' minutes')
+print('Total run time ' + str((finish_time - start_time) / 60) + ' minutes')
+print()
+
+
+
+# Step 5:  Print a list of 100 entries for validation
+
+random.seed(1234567)
+sample_papers = random.sample(all_papers_sid, 100)
+print('Validation sample:')
+print(sample_papers)
