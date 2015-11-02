@@ -15,7 +15,6 @@ import xmltodict
 
 from api_key import MY_API_KEY
 
-# TODO: also grab publication year
 def _parse_scopus_metadata(response_raw):
     '''
     Given the requests.response, parse the XML metadata.
@@ -27,6 +26,7 @@ def _parse_scopus_metadata(response_raw):
         'pmid': The paper's PubMed ID
         'authors': The paper's authors, as a list of Scopus author IDs
         'source': The journal, etc., the paper was published in, as a Scopus source ID
+        'year': The publication year
         'references': The paper's references, as a list of Scopus IDs
         'raw': The raw XML response from the server
     '''
@@ -91,6 +91,13 @@ def _parse_scopus_metadata(response_raw):
         source = ''
     #print source
     try:
+    	year = response['abstracts-retrieval-response']['item']['bibrecord']['head']['source']['publicationyear']['@first']
+    	year = int(year)
+    	#print(year)
+    except KeyError:
+    	print(response['abstracts-retrieval-response']['item']['bibrecord']['head']['source']['publicationyear'])
+    	year = None
+    try:
         refs_response = response['abstracts-retrieval-response']['item']['bibrecord']['tail']['bibliography']['reference']
         refs = []
         for ref in refs_response:
@@ -101,7 +108,7 @@ def _parse_scopus_metadata(response_raw):
         refs = []
     #print refs
     return {'doi': doi, 'sid': sid, 'pmid': pmid, 'authors': authors, 
-                'source': source, 'references': refs}
+                'source': source, 'year': year, 'references': refs}
                 
 def _get_query(query):
     '''
