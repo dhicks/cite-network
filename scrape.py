@@ -42,6 +42,17 @@ def _parse_scopus_metadata(response_raw):
         else:
             print(response)
             raise ValueError('Service error in query response')
+    if 'abstracts-retrieval-multidoc-response' in response:
+    	'''
+    	This seems to be the top-level field if Scopus finds multiple documents 
+    	with the same DOI.  Based on this result:  
+    		http://api.elsevier.com/content/abstract/doi/10.1007/s00204-014-1298-3?apiKey=1f271dd2cf40387ab1d7e4645d36f599
+    	it looks like this happens when an Online First version isn't correctly
+    	updated, and instead a new item is added to the database.  
+    	The second entry seems to be the later one, so we grab it.  
+    	'''
+    	response = {'abstracts-retrieval-response': 
+    					response['abstracts-retrieval-multidoc-response']['abstracts-retrieval-response'][1]}
     # The locations of these metadata are given in the Scopus XML documentation
     # http://ebrp.elsevier.com/pdf/Scopus_Custom_Data_Documentation_v4.pdf
     # If a field is missing, the dict raises a KeyError or TypeError ('NoneType' object is not subscriptable), and so we use a blank instead
@@ -95,7 +106,6 @@ def _parse_scopus_metadata(response_raw):
     	year = int(year)
     	#print(year)
     except KeyError:
-    	print(response['abstracts-retrieval-response']['item']['bibrecord']['head']['source']['publicationyear'])
     	year = None
     try:
         refs_response = response['abstracts-retrieval-response']['item']['bibrecord']['tail']['bibliography']['reference']

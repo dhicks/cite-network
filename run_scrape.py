@@ -10,10 +10,10 @@ import time
 
 # File to save the set of scraped data
 #max_sources = 20
-outfile = 'papers.test.json'
+outfile = 'papers.json'
 
 start_time = time.time()
-
+print('Run started at ' + time.strftime('%c', time.localtime()))
 
 
 # Step 1:  Define core set and retrieve metadata
@@ -29,8 +29,8 @@ with open(infile) as readfile:
         this_doi = row[0]
         gen_1_doi += [this_doi]
         # The next two lines limit how many DOIs we read, for debugging
-        if len(gen_1_doi) >= 1:
-            break
+#        if len(gen_1_doi) >= 1:
+#            break
 
 print(str(len(gen_1_doi)) + ' items in generation +1')
 print('Retrieving metadata for generation +1')
@@ -56,6 +56,9 @@ gen_0_sid = {sid for sid in gen_0_sid if sid not in gen_1_sid}
 
 
 # Step 2:  Two generation backwards search
+# TODO: generation 0 already has ~50k items
+#  so we'll need a way to break the retrieval into batches of ~10k, 
+#  each of which can be run a week apart
 
 print(str(len(gen_0_sid)) + ' items in generation 0')
 print('Retrieving metadata for generation 0')
@@ -127,6 +130,7 @@ with open(outfile, 'w') as out:
     json.dump(all_papers, out)
 
 finish_time = time.time()
+print('Run ended at ' + time.strftime('%c', time.localtime()))
 print('Total run time ' + str((finish_time - start_time) / 60) + ' minutes')
 print()
 

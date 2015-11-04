@@ -6,6 +6,8 @@ network in GEXF format.
 
 import json
 import networkx as nx
+# TODO: for efficiency reasons, consider rewriting this in graph-tool:  
+# https://graph-tool.skewed.de/
 
 # The json file with the dataset output from `run_scrape`
 infile = 'papers.json'
