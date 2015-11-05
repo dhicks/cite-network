@@ -15,6 +15,9 @@ import xmltodict
 
 from api_key import MY_API_KEY
 
+class ParseError(Exception):
+	pass
+
 def _parse_scopus_metadata(response_raw):
     '''
     Given the requests.response, parse the XML metadata.
@@ -41,7 +44,7 @@ def _parse_scopus_metadata(response_raw):
         # If something else is going on, raise an exception
         else:
             print(response)
-            raise ValueError('Service error in query response')
+            raise ParseError('Service error in query response')
     if 'abstracts-retrieval-multidoc-response' in response:
     	'''
     	This seems to be the top-level field if Scopus finds multiple documents 
@@ -149,7 +152,7 @@ def _get_query(query):
     
 
 
-def get_meta_by_doi(doi, save_raw = True):
+def get_meta_by_doi(doi, save_raw = False):
     '''
     Retrieve metadata for a single paper from Scopus given its DOI
     :param doi: The paper's DOI
@@ -176,7 +179,7 @@ def get_meta_by_doi(doi, save_raw = True):
         meta['raw'] = ''
     return meta
 
-def get_meta_by_scopus(sid, save_raw = True):
+def get_meta_by_scopus(sid, save_raw = False):
     '''
     Retrieve metadata for a single paper from Scopus given its Scopus ID
     :param sid: The paper's Scopus ID
@@ -203,7 +206,7 @@ def get_meta_by_scopus(sid, save_raw = True):
     return meta
 
                 
-def get_meta_by_pmid(pmid, save_raw = True):
+def get_meta_by_pmid(pmid, save_raw = False):
     '''
     Retrieve metadata for a single paper from Scopus given its PubMed ID
     :param pmid: The paper's PubMed ID
