@@ -77,13 +77,12 @@ if status['1']['start'] == False:
 		raise Exception('Error setting batch')
 
 if status['1']['finish'] == False:
-	# Run the batch
-	print('Running batch for generation +1')
-	batch_response = batch.run_batch(get_meta_by_doi)
-	if batch_response == False:
-		raise Exception('Error running batch')
+	if batch.exists_batch():
+		# Run the batch
+		print('Running batch for generation +1')
+		batch_response = batch.run_batch(get_meta_by_doi)
 
-	# If the batch finished on this run, exists_batch will return False
+	# If the batch finished on this run, or previously, exists_batch will return False
 	if batch.exists_batch():
 		# Exit gracefully
 		print('Finished the current batch run; batch not finished')

@@ -84,29 +84,39 @@ def run_batch(retrieve):
 			raise BatchError('Batch file does not read as list') 
 	with open(OUTPUT_FILENAME, 'r') as readfile:
 		data = json.load(readfile)
+
+	print('Total items to retrieve: ' + str(len(item_list)))
 		
 	# Grab the items that we'll retrieve on this run
 	this_run = item_list[:MAX_RUN_LEN]
+	print('Items to retrieve on this run: ' + str(len(this_run)))
 	
 	try:
 		temp_data = []					# Container for the newly retrieved data
 		retrieved = []					# Container for the list of items successfully retrieved
-		# TODO:  save progress every 1000 items or so
 		for item in this_run:
 			# Skip empty items
 			if item == '':
 				print('Skipped empty item')
+				retrieved += [item]
 				continue
 			# Retrieve the item's data
 			new_data = retrieve(item)
+			# The retrieve functions in scrape return empty metadata if 
+			#  the server returns a `Resource not found` error
+			#  If both DOI and SID are empty, this means we don't have a way to 
+			#  point at this entry anyways, so go ahead and discard it. 
+			if new_data['doi'] == '' and new_data['sid'] == '':
+				retrieved += [item]
+				continue
 			# Add it to our temporary container
 			temp_data += [new_data]
 			# Note that we retrieved it successfully
 			retrieved += [item]
 			# Print a count for the user
-			if len(retrieved) % 100 == 0:
-				print(len(retrieved))
-			if len(retrieved) % 1000 == 0:
+			if len(retrieved) % 50 == 0:
+				print(len(data) + len(retrieved))
+			if len(retrieved) >= 1000:
 				# Add temp_data to data
 				data += temp_data
 				# Remove retrieved items from item_list
