@@ -27,7 +27,7 @@ css_dois_file = 'css_dois.txt'
 
 print('Run started at ' + time.strftime('%c', time.localtime()))
 
-# Set up a file that tracks the status of the scrape
+# A file to track the status of the scrape
 status_file = 'status.json'
 if os.access(status_file, os.R_OK):
 	with open(status_file) as readfile:
@@ -88,6 +88,7 @@ if status['1']['finish'] == False:
 		print('Finished the current batch run; batch not finished')
 		sys.exit(0)
 	else:
+		print('Finished the batch; moving data and cleaning up')
 		# Retrieve the batch results
 		gen_1 = batch.retrieve_batch()
 		# Write them to a permanent file
@@ -96,9 +97,11 @@ if status['1']['finish'] == False:
 		# Clean up the batch output
 		batch.clean_batch()
 		
+		# TODO: this next bit really belongs at the beginning of Step 2a
 		# Extract the sids and references
 		gen_1_sid = [paper['sid'] for paper in gen_1]
 		gen_0_sid = []
+		# TODO: use a list comprehension instead of a loop here
 		for paper in gen_1:
 			# Skip papers with missing reference list
 			if 'references' not in paper:
@@ -144,6 +147,7 @@ if status['2a']['finish'] == False:
 		print('Finished the current batch run; batch not finished')
 		sys.exit(0)
 	else:
+		print('Finished the batch; moving data and cleaning up')
 		# Retrieve the batch results
 		gen_0 = batch.retrieve_batch()
 		# Write them to a permanent file
@@ -151,25 +155,26 @@ if status['2a']['finish'] == False:
 			json.dump(gen_0, writefile)
 		# Clean up the batch output
 		batch.clean_batch()
-		
-		# Extract the SIDs
-		gen_0_sid = [paper['sid'] for paper in gen_0]
-		# Extract the references
-		gen_n1_sid = []
-		for paper in gen_0:
-			# Skip papers with missing reference lists
-			if 'references' not in paper:
-				continue
-			gen_n1_sid = paper['references']
-		# Remove all of the SIDs scraped in generation 0
-		gen_n1_sid = {sid for sid in gen_n1_sid if sid not in gen_0_sid}
-		
-		# Get the generation 1 SIDs
-		with open(gen_1_outfile) as readfile:
-			gen_1 = json.load(readfile)
-		gen_1_sid = [paper['sid'] for paper in gen_1]
-		# And remove all of the SIDs scraped in generation 1
-		gen_n1_sid = {sid for sid in gen_n1_sid if sid not in gen_1_sid}
+# 		
+#		# TODO: this code was moved to start of 2b; delete it here
+# 		# Extract the SIDs
+# 		gen_0_sid = [paper['sid'] for paper in gen_0]
+# 		# Extract the references
+# 		gen_n1_sid = []
+# 		for paper in gen_0:
+# 			# Skip papers with missing reference lists
+# 			if 'references' not in paper:
+# 				continue
+# 			gen_n1_sid = paper['references']
+# 		# Remove all of the SIDs scraped in generation 0
+# 		gen_n1_sid = {sid for sid in gen_n1_sid if sid not in gen_0_sid}
+# 		
+# 		# Load the generation 1 SIDs
+# 		with open(gen_1_outfile) as readfile:
+# 			gen_1 = json.load(readfile)
+# 		gen_1_sid = [paper['sid'] for paper in gen_1]
+# 		# And remove all of the SIDs scraped in generation 1
+# 		gen_n1_sid = {sid for sid in gen_n1_sid if sid not in gen_1_sid}
 		
 		# Finished with step 2a
 		status['2a']['finish'] = True
@@ -177,11 +182,48 @@ if status['2a']['finish'] == False:
 			json.dump(status, writefile)
 			
 if status['2b']['start'] == False:
-	print(str(len(gen_0_sid)) + ' items in generation -1')
+	with open(gen_0_outfile) as readfile:
+		gen_0 = json.load(readfile)
+	# Extract the SIDs
+	gen_0_sid = [paper['sid'] for paper in gen_0]
+	# Extract the references
+	#  This isn't perspicuous.  
+	#  `for paper in gen_0` gets every paper in generation 0
+	#  `if 'references' in paper` filters out the papers without reference lists
+	#  `for reference in paper['references']` unpacks the list of references
+	#  Extracting as a set removes redundancies automatically
+	gen_n1_sid = {reference for paper in gen_0 
+								if 'references' in paper 
+							for reference in paper['references']}
+	# TODO: this code was replaced with the list comprehension above; delete it
+# 	for paper in gen_0:
+# 		# Skip papers with missing reference lists
+# 		if 'references' not in paper:
+# 			continue
+# 		gen_n1_sid = paper['references']
+	print('Total ' + str(len(gen_n1_sid)) + ' references extracted from generation 0')
+
+	# Remove all of the SIDs scraped in generation 0
+	print('Filtering out generation 0 SIDs')
+	gen_n1_sid = {sid for sid in gen_n1_sid if sid not in gen_0_sid}
+	print('Done')
+	
+	# Load the generation 1 SIDs
+	print('Filtering out generation 1 SIDs')
+	with open(gen_1_outfile) as readfile:
+		gen_1 = json.load(readfile)
+	gen_1_sid = [paper['sid'] for paper in gen_1]
+	# And remove all of the SIDs scraped in generation 1
+	gen_n1_sid = {sid for sid in gen_n1_sid if sid not in gen_1_sid}
+	print('Done')
+
+	print(str(len(gen_n1_sid)) + ' new items in generation -1')
 	
 	if not batch.exists_batch():
 		print('Setting batch for generation -1')
 		batch_response = batch.set_batch(list(gen_n1_sid))
+	else:
+		raise Exception('Error setting batch')
 		
 	if batch_response == True:
 		status['2b']['start'] = True
@@ -203,6 +245,7 @@ if status['2b']['finish'] == False:
 		print('Finished the current batch run; batch not finished')
 		sys.exit(0)
 	else:
+		print('Finished the batch; moving data and cleaning up')
 		# Retrieve the batch results
 		gen_n1 = batch.retrieve_batch()
 		# Write them to a permanent file
@@ -265,7 +308,7 @@ if status['3']['start'] == False:
 
 
 
-# Step 4:  Print a list of 100 entries for validation
+# Step 4:  Generate a list of 100 entries for validation
 
 if status['4']['start'] == False:
 	with open(combined_outfile) as readfile:

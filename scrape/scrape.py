@@ -20,8 +20,8 @@ class ParseError(Exception):
 
 def _parse_scopus_metadata(response_raw):
     '''
-    Given the requests.response, parse the XML metadata.
-    Metadata to gather:  DOI, Scopus ID, author IDs, source ID, references.
+    Given the `requests.Response`, parse the XML metadata.
+    Metadata to gather:  DOI, Scopus ID, author IDs, source ID, year, references.
     :param response_raw: XML metadata, retrieved from Scopus using requests.get
     :return: A dict of metadata:
         'doi': The paper's DOI
@@ -38,9 +38,10 @@ def _parse_scopus_metadata(response_raw):
     #print 'parsed to dict'
     # This branch catches error codes in the response
     if 'service-error' in response:
-        # If the resource isn't found, we'll just get a bunch of key errors and can return an empty set of metadata
+        # If the resource isn't found, we'll just get a bunch of key errors;
+        #  return an empty set of metadata
         if response['service-error']['status']['statusCode'] == 'RESOURCE_NOT_FOUND':
-            print('Resource not found error')
+            print('\t\tResource not found error')
         # If something else is going on, raise an exception
         else:
             print(response)
@@ -52,13 +53,15 @@ def _parse_scopus_metadata(response_raw):
     		http://api.elsevier.com/content/abstract/doi/10.1007/s00204-014-1298-3?apiKey=1f271dd2cf40387ab1d7e4645d36f599
     	it looks like this happens when an Online First version isn't correctly
     	updated, and instead a new item is added to the database.  
-    	The second entry seems to be the later one, so we grab it.  
+    	The second entry (index 1) seems to be the later one, so we grab it.  
     	'''
     	response = {'abstracts-retrieval-response': 
     					response['abstracts-retrieval-multidoc-response']['abstracts-retrieval-response'][1]}
     # The locations of these metadata are given in the Scopus XML documentation
     # http://ebrp.elsevier.com/pdf/Scopus_Custom_Data_Documentation_v4.pdf
-    # If a field is missing, the dict raises a KeyError or TypeError ('NoneType' object is not subscriptable), and so we use a blank instead
+    # If a field is missing, the dict raises a KeyError or TypeError 
+    #  (`'NoneType' object is not subscriptable`), and so we use an empty string 
+    #  instead
     try:
         doi = response['abstracts-retrieval-response']['coredata']['prism:doi']
     except KeyError:
@@ -90,9 +93,7 @@ def _parse_scopus_metadata(response_raw):
                 authors += [author['@auid']]
         else:
             raise ValueError('Problem parsing authors for doi ' + doi)
-    except KeyError:
-        authors = []
-    except TypeError:
+    except(KeyError, TypeError):
         authors = []
         #raise ValueError('Problem parsing authors for doi ' + doi)
     #print authors
@@ -115,9 +116,7 @@ def _parse_scopus_metadata(response_raw):
         refs = []
         for ref in refs_response:
             refs += [ref['ref-info']['refd-itemidlist']['itemid']['#text']]
-    except KeyError:
-        refs = []
-    except TypeError:
+    except(KeyError, TypeError):
         refs = []
     #print refs
     return {'doi': doi, 'sid': sid, 'pmid': pmid, 'authors': authors, 
@@ -166,11 +165,12 @@ def get_meta_by_doi(doi, save_raw = False):
         'raw': The raw XML response from the server
     '''
     #print 'getting metadata for DOI ' + doi
-    # Build the http query, and send it using `requests`
+    # Build the http query, and send it using `_get_query`
     base_query = 'http://api.elsevier.com/content/abstract/doi/'
     query = base_query + doi + '?' + 'apiKey=' + MY_API_KEY
     print('\t' + query)
     response_raw = _get_query(query)
+    # Then parse using `_parse_scopus_metadata`
     meta = _parse_scopus_metadata(response_raw)
     # If the call asks us to save the raw response, do so; otherwise add a blank
     if save_raw:
@@ -178,6 +178,7 @@ def get_meta_by_doi(doi, save_raw = False):
     else:
         meta['raw'] = ''
     return meta
+
 
 def get_meta_by_scopus(sid, save_raw = False):
     '''
@@ -192,7 +193,7 @@ def get_meta_by_scopus(sid, save_raw = False):
         'references': The paper's references, as a list of Scopus IDs
         'raw': The raw XML response from the server
     '''
-    # This works just like get_meta_by_doi 
+    # This works just like `get_meta_by_doi`
     base_query = 'http://api.elsevier.com/content/abstract/scopus_id/'
     query = base_query + sid + '?' + 'apiKey=' + MY_API_KEY
     print('\t' + query)

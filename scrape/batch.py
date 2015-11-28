@@ -5,7 +5,7 @@ BATCH_FOLDER = 'batch'			# Folder, in cwd, to store batch data
 BATCH_FILENAME = 'batch.json'	# File that holds the list of items to be retrieved
 OUTPUT_FILENAME = 'data.json'	# File that holds the retrieved data
 
-MAX_RUN_LEN = 9000				# Maximum number of items to retrieve w/ each run
+MAX_RUN_LEN = 17000				# Maximum number of items to retrieve w/ each run
 
 
 class BatchError(Exception):
@@ -13,6 +13,8 @@ class BatchError(Exception):
 
 def exists_batch():
 	'''
+	Test for an active (incomplete) batch
+	
 	:return: True iff a batch file exists in the batch folder
 	'''
 	return(os.access(BATCH_FOLDER + '/' + BATCH_FILENAME, os.F_OK))
@@ -21,8 +23,7 @@ def set_batch(item_list):
 	'''
 	Set up a new batch.  
 	
-	:param batch_folder: Path to the folder where the batch will happen.
-	:param list: List of items to retrieve from Scopus
+	:param list: List of items to retrieve
 	
 	:return: True if the batch was set up correctly
 	'''
@@ -84,6 +85,9 @@ def run_batch(retrieve):
 			raise BatchError('Batch file does not read as list') 
 	with open(OUTPUT_FILENAME, 'r') as readfile:
 		data = json.load(readfile)
+	# Make a backup of the data file
+	with open(OUTPUT_FILENAME + '.bak', 'w') as writefile:
+		json.dump(data, writefile)
 
 	print('Total items to retrieve: ' + str(len(item_list)))
 		
@@ -109,6 +113,10 @@ def run_batch(retrieve):
 			if new_data['doi'] == '' and new_data['sid'] == '':
 				retrieved += [item]
 				continue
+			if (('references' not in new_data) or 
+					(new_data['references'] == '') or 
+					(new_data['references'] == [])):
+				input('Empty reference list. Do anything except Ctrl-C to continue.')	
 			# Add it to our temporary container
 			temp_data += [new_data]
 			# Note that we retrieved it successfully
@@ -146,11 +154,11 @@ def run_batch(retrieve):
 		else:
 			os.remove(BATCH_FILENAME)
 		print('Saved retrieved data')
-		print('Finished batch run')
 		# Reset the working directory
 		os.chdir(original_wd)
 
 	# Return that everything went okay
+	print('Finished batch run')
 	return True
 	
 def retrieve_batch():
@@ -176,6 +184,7 @@ def clean_batch():
 	return(os.remove(BATCH_FOLDER + '/' + OUTPUT_FILENAME))
 
 if __name__ == '__main__':
+	# A little test
 	print(exists_batch())
 	set_batch(['a', 'b', 'c'])
 	print(exists_batch())
