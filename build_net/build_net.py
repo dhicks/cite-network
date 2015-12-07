@@ -5,7 +5,6 @@ network in GEXF format.
 '''
 import graph_tool as gt
 import graph_tool.topology as topo
-import graph_tool.community as comm
 
 import json
 import os.path as path

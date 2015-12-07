@@ -118,6 +118,3 @@ for infile, outfile, samplesfile in nets:
 		json.dump(samples, writefile)
 	print('modularity mean: ' + str(np.mean(samples)))
 	print('modularity sd: ' + str(np.std(samples)))
-
-	#n, bins, patches = plt.hist(samples, 50)
-	#plt.show()
