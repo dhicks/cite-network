@@ -148,6 +148,29 @@ def _degree_dists(net, outfile_pre, core, show_plot = False):
 
 
 
+def summary(data):
+	'''
+	Report descriptive statistics for the 1D `data`
+	'''
+	stats = {'count' : int(len(data)),
+			'min': min(data).item(),
+			'max': max(data).item(),
+
+			'mean': np.average(data),
+			'sd': np.std(data),
+
+			'q05': np.percentile(data, 5),
+			'q25': np.percentile(data, 25),
+			'median': np.median(data),
+			'q75': np.percentile(data, 75),
+			'q95': np.percentile(data, 95)
+			}
+	stats['iqr50'] = stats['q75'] - stats['q25']
+	stats['iqr90'] = stats['q95'] - stats['q05']
+	return(stats)
+	
+
+
 def degree_dist(net, core, show_plot = False, outfile = None, save_plot = True):
 	'''
 	Plot out-degree empirical CDF
@@ -179,13 +202,17 @@ def degree_dist(net, core, show_plot = False, outfile = None, save_plot = True):
 	# Grab the degrees and rankings for the core vertices
 	out_degrees_core = [vertex.out_degree() for vertex in core]
 	out_degree_dist_core = [1 - out_degree_ecdf(degree) for degree in out_degrees_core]
-	# TODO: this might be inefficient if we're building the list of vertices new each time
-	ranking_core = [vertex_ranking[list(net.vertices()).index(vertex)] for vertex in core]
+	# For efficiency reasons, make a standalone list of vertices
+	vertices = list(net.vertices())
+	ranking_core = [vertex_ranking[vertices.index(vertex)] for vertex in core]
 	degree_dist_core = \
 		pd.DataFrame({'degree': out_degrees_core, 
 						'density': out_degree_dist_core, 
 						'rank': ranking_core})
 	#print(degree_dist_core)
+	print('Summary statistics for core vertex out-degrees:')
+	degree_dist_core_summary = {k: summary(degree_dist_core[k]) for k in degree_dist_core}
+	print(pd.DataFrame(degree_dist_core_summary))
 
 	# Build the degree x density plot
 	density_plot = ggplot(aes(x = 'degree'),
@@ -253,7 +280,7 @@ def ev_centrality_dist(net, core, show_plot = False, outfile = None, save_plot =
 	# Rank the vertices by eigenvector centrality
 	print('Ranking centralities')
 	vertex_ranking = len(eigen_central) - bn.rankdata(eigen_central) + 1
-	print(vertex_ranking)
+	#print(vertex_ranking)
 	print('Mapping rankings to centralities')
 	# Map these against `centralities`:  
 	#  for each degree, get the index of its first occurrence in the 
@@ -266,19 +293,22 @@ def ev_centrality_dist(net, core, show_plot = False, outfile = None, save_plot =
 	centrality_dist = pd.DataFrame({'centrality': centralities,
 									'density': centrality_distribution,
 									'rank': ranking})
-	print(centrality_dist.head())
+	#print(centrality_dist.head())
 
 	# Grab centralities and rankings for the core vertices
 	centralities_core = [eigen_central_pmap[vertex] for vertex in core]
 	centrality_distribution_core = [1 - eigen_central_ecdf(centrality) for centrality in centralities_core]
-	# TODO: this is inefficient if we're building the list of vertices new each time
-	ranking_core = [vertex_ranking[list(net.vertices()).index(vertex)] for vertex in core]
+	# For efficiency, build a standalone list of vertices
+	vertices = list(net.vertices())
+	ranking_core = [vertex_ranking[vertices.index(vertex)] for vertex in core]
 	centrality_dist_core = \
 		pd.DataFrame({'centrality': centralities_core,
 						'density': centrality_distribution_core,
 						'rank': ranking_core})
-	print(centrality_dist_core.head())
-
+	#print(centrality_dist_core)
+	print('Summary statistics for core vertex centralities:')
+	centrality_dist_core_summary = {k: summary(centrality_dist_core[k]) for k in centrality_dist_core}
+	print(pd.DataFrame(centrality_dist_core_summary))
 	
 	# Build the plot
 	density_plot = ggplot(aes(x = 'centrality'), data = centrality_dist) +\
@@ -317,7 +347,7 @@ def ev_centrality_dist(net, core, show_plot = False, outfile = None, save_plot =
 	if show_plot:
 		print(ranking_plot)
 	if outfile is not None and save_plot:
-		ggsave(filename = outfile + '.ev_rank' + '.pdf', plot = ranking_plot)
+		ggsave(filename = outfile + '.evc_rank' + '.pdf', plot = ranking_plot)
 	
 	return(density_plot, ranking_plot)
 
@@ -424,14 +454,14 @@ ptnet_outfile = 'ptnet.graphml'
 
 # Load networks for analysis
 #infiles = ['citenet0.graphml']
-#infiles = ['autnet0.graphml']
-infiles = ['autnet1.graphml']
+infiles = ['autnet0.graphml']
+#infiles = ['autnet1.graphml']
 #infiles = ['citenet0.graphml', 'autnet0.graphml', 'autnet1.graphml']
 
-for infile in infiles:
-	# Timestamp
-	print(datetime.now())
+# Timestamp
+print(datetime.now())
 
+for infile in infiles:
 	# Load the network
 	net, outfile_pre, core_pmap, core_vertices = load_net(infile, core = True)
 	
@@ -448,17 +478,18 @@ for infile in infiles:
 	
 	# Calculate the plotting layout
 	print('Calculating layout')
-	layout = gtdraw.radial_tree_layout(net, core_vertices[0])
-	#layout = gtdraw.fruchterman_reingold_layout(net)
+	#layout = gtdraw.radial_tree_layout(net, core_vertices[0])
+	layout = gtdraw.sfdp_layout(net, p = 4, verbose = True)
 	print('Plotting')
 	gtdraw.graphviz_draw(net, vcolor = core_pmap, pos = layout,
+							vsize = .2, size = (50, 50),
 							output = outfile_pre + '.net' + '.png')
 	net.set_vertex_filter(None)
 	
 	# ECDF for out-degree distribution
-	degree_dist(net, core_vertices, outfile = outfile_pre, show_plot = False, save_plot = False)
+	degree_dist(net, core_vertices, outfile = outfile_pre, show_plot = False, save_plot = True)
 	# ECDF for eigenvector centrality
-	ev_centrality_dist(net, core_vertices, outfile = outfile_pre, show_plot = False, save_plot = False)
+	ev_centrality_dist(net, core_vertices, outfile = outfile_pre, show_plot = False, save_plot = True)
 	
 	# Calculate modularity, using the core vertices as the partition
 	modularity = comm.modularity(net, core_pmap)
@@ -468,8 +499,8 @@ for infile in infiles:
 	n_core = len(core_vertices)
 	# Construct a sampling distribution for the modularity statistic
 	#  And use it to calculate a p-value for the modularity
-	p = modularity_sample_dist(net, n_core, modularity, 
-								outfile = outfile_pre, show_plot = False)
+# 	p = modularity_sample_dist(net, n_core, modularity, 
+# 								outfile = outfile_pre, show_plot = False)
 	
 	# Complexity-theoretic partitioning
 	print('Complexity-theoretic partitioning')
@@ -489,5 +520,8 @@ for infile in infiles:
 	# Modularity optimization
 # 	part_block_pmap = gt.community_structure(net, n_iter = 500, n_spins = 2)
 
+	# Timestamp
+	print(datetime.now())
+	# Visually separate analyses
 	print('-'*40)
 	
