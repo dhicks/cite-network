@@ -203,8 +203,9 @@ def degree_dist(net, core, show_plot = False, outfile = None, save_plot = True):
 	out_degrees_core = [vertex.out_degree() for vertex in core]
 	out_degree_dist_core = [1 - out_degree_ecdf(degree) for degree in out_degrees_core]
 	# For efficiency reasons, make a standalone list of vertices
-	vertices = list(net.vertices())
-	ranking_core = [vertex_ranking[vertices.index(vertex)] for vertex in core]
+	#vertices = list(net.vertices())
+	#ranking_core = [vertex_ranking[vertices.index(vertex)] for vertex in core]
+	ranking_core = [vertex_ranking[out_degrees.index(degree)] for degree in out_degrees_core]
 	degree_dist_core = \
 		pd.DataFrame({'degree': out_degrees_core, 
 						'density': out_degree_dist_core, 
@@ -299,8 +300,9 @@ def ev_centrality_dist(net, core, show_plot = False, outfile = None, save_plot =
 	centralities_core = [eigen_central_pmap[vertex] for vertex in core]
 	centrality_distribution_core = [1 - eigen_central_ecdf(centrality) for centrality in centralities_core]
 	# For efficiency, build a standalone list of vertices
-	vertices = list(net.vertices())
-	ranking_core = [vertex_ranking[vertices.index(vertex)] for vertex in core]
+	#vertices = list(net.vertices())
+	#ranking_core = [vertex_ranking[vertices.index(vertex)] for vertex in core]
+	ranking_core = [vertex_ranking[eigen_central.index(centrality)] for centrality in centralities_core]
 	centrality_dist_core = \
 		pd.DataFrame({'centrality': centralities_core,
 						'density': centrality_distribution_core,
