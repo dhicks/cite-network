@@ -360,9 +360,10 @@ def run_analysis(netfile):
 	print(datetime.now())
 	
 	# Load the network
+	# --------------------
 	net, outfile_pre, core_pmap, core_vertices = load_net(netfile + '.graphml', 
-															core = True)
- 	# Set up a filter for plotting purposes
+ 															core = True)
+ 	# Add a filter
 	print('Adding filter')
 	# Recent papers filter for the citation net
 	if netfile == 'citenet0':
@@ -382,21 +383,29 @@ def run_analysis(netfile):
 	print('Filtered vertices: ' + str(net.num_vertices()))
 	print('Filtered edges: ' + str(net.num_edges()))
 	
+
+	# Plotting
+	# --------------------
 	# Calculate the plotting layout
 	print('Calculating layout')
-	#layout = gtdraw.radial_tree_layout(net, core_vertices[0])
+	#net.vp['layout'] = gtdraw.radial_tree_layout(net, core_vertices[0], r = 4)
 	net.vp['layout'] = gtdraw.sfdp_layout(net, C = .5, p = 6, verbose = True)
 	print('Plotting')
 	gtdraw.graphviz_draw(net, vcolor = core_pmap, pos = net.vp['layout'],
-							vsize = .1, size = (50, 50),
-							output = outfile_pre + '.net' + '.png')
+							vsize = .2, size = (50, 50),
+							output = outfile_pre + '.net' + '.png'
+							)
 	#net.set_vertex_filter(None)
 	
+	# Vertex statistics
+	# --------------------
 	# ECDF for out-degree distribution
 	degree_dist(net, core_vertices, outfile = outfile_pre, show_plot = False, save_plot = True)
 	# ECDF for eigenvector centrality
 	ev_centrality_dist(net, core_vertices, outfile = outfile_pre, show_plot = False, save_plot = True)
 	
+	# Modularity
+	# --------------------
 	# Calculate modularity, using the core vertices as the partition
 	modularity = comm.modularity(net, core_pmap)
 	print('Observed modularity: ' + str(modularity))
@@ -409,22 +418,27 @@ def run_analysis(netfile):
 								outfile = outfile_pre, show_plot = False)
 	
 	# Complexity-theoretic partitioning
-	print('Complexity-theoretic partitioning')
+	print('Information-theoretic partitioning')
 	# Calculate the partition
 	part_block = comm.minimize_blockmodel_dl(net, min_B = 2, max_B = 2)
 	# Extract the block memberships as a pmap
-	part_block_pmap = part_block.get_blocks()
+	net.vp['partition'] = part_block.get_blocks()
 	# Calculate the modularity
-	block_modularity = comm.modularity(net, part_block_pmap)
+	block_modularity = comm.modularity(net, net.vp['partition'])
 	print('Partion modularity: ' + str(block_modularity))
 	
-	#print('Plotting')
-	#net.set_vertex_filter(extended_set_pmap)
-	#gtdraw.graphviz_draw(net, vcolor = part_block_pmap, pos = layout)
+	print('Plotting')
+	size_pmap = net.new_vertex_property('float', vals = .2 + .5 * core_pmap.a)
+	gtdraw.graphviz_draw(net, vcolor = net.vp['partition'], pos = net.vp['layout'],
+							vsize = size_pmap, size = (50, 50),
+							output = outfile_pre + '.partition' + '.png'
+							)
 	#net.set_vertex_filter(None)
 	
 	# Modularity optimization
 # 	part_block_pmap = gt.community_structure(net, n_iter = 500, n_spins = 2)
+
+	# Comparison networks
 
 	# Save output
 	net.save(netfile + '.out' + '.graphml')
@@ -448,8 +462,8 @@ ptnet_outfile = 'ptnet.graphml'
 
 if __name__ == '__main__':
 	# Load networks for analysis
-	#netfiles = ['citenet0']
-	netfiles = ['autnet0']
+	netfiles = ['citenet0']
+	#netfiles = ['autnet0']
 	#netfiles = ['autnet1']
 	#netfiles = ['autnet1', 'autnet0', 'citenet0']
 
