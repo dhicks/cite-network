@@ -81,17 +81,26 @@ def degree_dist(net, core, show_plot = False, outfile = None, save_plot = True):
 	Plot out-degree empirical CDF
 	'''
 	# Build degree distribution
-	#  Out degree for every vertex
+	# Out degree for every vertex
 	out_degrees = [vertex.out_degree() for vertex in net.vertices()]
+	# Write them into the graph
+	net.vp['out-degree'] = net.new_vertex_property('int', vals = out_degrees)
 	#  x values: degrees
 	degrees = list(set(out_degrees))
  	#  Use the ecdf to build the y values
 	out_degree_ecdf = ecdf(out_degrees)
 	#  Use 1-ecdf for legibility when most nodes have degree near 0
 	out_degree_dist = [1 - out_degree_ecdf(degree) for degree in degrees]
+	# Write 1-ecdf into the graph
+	net.vp['out-degree ecdf'] = \
+		net.new_vertex_property('float', 
+			vals = [1 - out_degree_ecdf(net.vp['out-degree'][vertex]) 
+						for vertex in net.vertices()])
 	
 	# Rank the vertices by out-degree
 	vertex_ranking = len(out_degrees) - bn.rankdata(out_degrees) + 1
+	# Write them into the graph
+	net.vp['out-degree rank'] = net.new_vertex_property('int', vals = vertex_ranking)
 	# Map these against `degree`:  
 	#  for each degree, get the index of its first occurrence in the 
 	#  vertex-level list `out_degrees`; that index corresponds to the 
@@ -105,20 +114,16 @@ def degree_dist(net, core, show_plot = False, outfile = None, save_plot = True):
 								'rank': ranking})
 	
 	# Grab the degrees and rankings for the core vertices
-	out_degrees_core = [vertex.out_degree() for vertex in core]
-	out_degree_dist_core = [1 - out_degree_ecdf(degree) for degree in out_degrees_core]
-	# For efficiency reasons, make a standalone list of vertices
-	#vertices = list(net.vertices())
-	#ranking_core = [vertex_ranking[vertices.index(vertex)] for vertex in core]
-	ranking_core = [vertex_ranking[out_degrees.index(degree)] for degree in out_degrees_core]
+	out_degrees_core = [net.vp['out-degree'][vertex] for vertex in core]
+	out_degree_dist_core = [net.vp['out-degree ecdf'][vertex] for vertex in core]
+	ranking_core = [net.vp['out-degree rank'][vertex] for vertex in core]
 	degree_dist_core = \
 		pd.DataFrame({'degree': out_degrees_core, 
 						'density': out_degree_dist_core, 
 						'rank': ranking_core})
 	#print(degree_dist_core)
 	print('Summary statistics for core vertex out-degrees:')
-	degree_dist_core_summary = {k: summary(degree_dist_core[k]) for k in degree_dist_core}
-	print(pd.DataFrame(degree_dist_core_summary))
+	print(pd.DataFrame({k: summary(degree_dist_core[k]) for k in degree_dist_core}))
 
 	# Build the degree x density plot
 	density_plot = ggplot(aes(x = 'degree'),
@@ -168,13 +173,12 @@ def ev_centrality_dist(net, core, show_plot = False, outfile = None, save_plot =
 	'''
 	Calculate and plot eigenvector centrality distributions. 
 	'''
-	# Calculate eigenvector centrality
-	eigen_central_pmap = net.new_vertex_property('double')
+	# Calculate eigenvector centrality and write them into the graph
 	print('Calculating eigenvector centrality')
-	eigen_central_pmap = gtcentral.eigenvector(net, epsilon=1e-03)[1]
+	net.vp['evc'] = gtcentral.eigenvector(net, epsilon=1e-03)[1]
 	print('Done')
 	# Extract them into a useful format
-	eigen_central = eigen_central_pmap.get_array().tolist()
+	eigen_central = net.vp['evc'].get_array().tolist()
 	# x values: centralities
 	centralities = list(set(eigen_central))
 	# Use the ecdf to build the y values
@@ -182,10 +186,16 @@ def ev_centrality_dist(net, core, show_plot = False, outfile = None, save_plot =
 	# Use 1-ecdf for legibility when most nodes have centrality near 0
 	centrality_distribution = \
 		[1 - eigen_central_ecdf(centrality) for centrality in centralities]
+	# Write 1-ecdf into the graph
+	net.vp['evc ecdf'] = \
+		net.new_vertex_property('float',
+			vals = [1 - eigen_central_ecdf(net.vp['evc'][vertex])
+						for vertex in net.vertices()])
 
 	# Rank the vertices by eigenvector centrality
-	print('Ranking centralities')
 	vertex_ranking = len(eigen_central) - bn.rankdata(eigen_central) + 1
+	# Write them into the graph
+	net.vp['evc rank'] = net.new_vertex_property('int', vals = vertex_ranking)
 	#print(vertex_ranking)
 	print('Mapping rankings to centralities')
 	# Map these against `centralities`:  
@@ -202,20 +212,16 @@ def ev_centrality_dist(net, core, show_plot = False, outfile = None, save_plot =
 	#print(centrality_dist.head())
 
 	# Grab centralities and rankings for the core vertices
-	centralities_core = [eigen_central_pmap[vertex] for vertex in core]
-	centrality_distribution_core = [1 - eigen_central_ecdf(centrality) for centrality in centralities_core]
-	# For efficiency, build a standalone list of vertices
-	#vertices = list(net.vertices())
-	#ranking_core = [vertex_ranking[vertices.index(vertex)] for vertex in core]
-	ranking_core = [vertex_ranking[eigen_central.index(centrality)] for centrality in centralities_core]
+	centralities_core = [net.vp['evc'][vertex] for vertex in core]
+	centrality_distribution_core = [net.vp['evc ecdf'][vertex] for vertex in core]
+	ranking_core = [net.vp['evc rank'][vertex] for vertex in core]
 	centrality_dist_core = \
 		pd.DataFrame({'centrality': centralities_core,
 						'density': centrality_distribution_core,
 						'rank': ranking_core})
 	#print(centrality_dist_core)
 	print('Summary statistics for core vertex centralities:')
-	centrality_dist_core_summary = {k: summary(centrality_dist_core[k]) for k in centrality_dist_core}
-	print(pd.DataFrame(centrality_dist_core_summary))
+	print(pd.DataFrame({k: summary(centrality_dist_core[k]) for k in centrality_dist_core}))
 	
 	# Build the plot
 	density_plot = ggplot(aes(x = 'centrality'), data = centrality_dist) +\
@@ -378,11 +384,10 @@ def run_analysis(netfile):
 	
 	# Calculate the plotting layout
 	print('Calculating layout')
-	# TODO: store layout in network and check whether it needs to be recalculated
 	#layout = gtdraw.radial_tree_layout(net, core_vertices[0])
-	layout = gtdraw.sfdp_layout(net, C = .5, p = 6, verbose = True)
+	net.vp['layout'] = gtdraw.sfdp_layout(net, C = .5, p = 6, verbose = True)
 	print('Plotting')
-	gtdraw.graphviz_draw(net, vcolor = core_pmap, pos = layout,
+	gtdraw.graphviz_draw(net, vcolor = core_pmap, pos = net.vp['layout'],
 							vsize = .1, size = (50, 50),
 							output = outfile_pre + '.net' + '.png')
 	#net.set_vertex_filter(None)
@@ -421,6 +426,9 @@ def run_analysis(netfile):
 	# Modularity optimization
 # 	part_block_pmap = gt.community_structure(net, n_iter = 500, n_spins = 2)
 
+	# Save output
+	net.save(netfile + '.out' + '.graphml')
+
 	# Timestamp
 	print(datetime.now())
 	# Visually separate analyses
@@ -440,13 +448,13 @@ ptnet_outfile = 'ptnet.graphml'
 
 if __name__ == '__main__':
 	# Load networks for analysis
-	#netfiles = ['citenet0.graphml']
-	#netfiles = ['autnet0.graphml']
-	netfiles = ['autnet1']
+	#netfiles = ['citenet0']
+	netfiles = ['autnet0']
+	#netfiles = ['autnet1']
 	#netfiles = ['autnet1', 'autnet0', 'citenet0']
 
 	for netfile in netfiles:
-		logfile = netfile + '.log'
-		with open(logfile, 'w') as log:
-			# TODO: print ~> logging to logfile
-			run_analysis(netfile)
+		#logfile = netfile + '.log'
+		#with open(logfile, 'w') as log:
+		# TODO: print ~> logging to logfile
+		run_analysis(netfile)
