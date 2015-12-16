@@ -346,7 +346,11 @@ def modularity_sample_dist(net, n_core, obs_mod,
 			
 	# Calculate p-value
 	p = p_sample(samples, obs_mod)
-	print('P-value of modularity: ' + str(p))
+	print('P-value of observed modularity: ' + str(p))
+
+	# Fold of observation relative to sampling distribution mean
+	fold = obs_mod / np.mean(samples)
+	print('Fold of observed modularity: ' + str(fold))
 
 	# Plot the sample distribution
 	sample_plot = plot_sample_dist(samples, obs_mod, p_label = p)
@@ -357,7 +361,7 @@ def modularity_sample_dist(net, n_core, obs_mod,
 		ggsave(filename = outfile + '.mod_sample' + '.pdf', 
 				plot = sample_plot)
 
-	return(p)
+	return(p, fold)
 
 
 
@@ -386,6 +390,10 @@ def optimal_sample_dist(net, obs_mod,
 	p = p_sample(samples, obs_mod)
 	print('P-value of modularity: ' + str(p))
 
+	# Fold of observation relative to sampling distribution mean
+	fold = obs_mod / np.mean(samples)
+	print('Fold of observed modularity: ' + str(fold))
+
 	# Plot the sample distribution
 	sample_plot = plot_sample_dist(samples, obs_mod, p_label = p)
 	
@@ -395,7 +403,7 @@ def optimal_sample_dist(net, obs_mod,
 		ggsave(filename = outfile + '.opt_sample' + '.pdf', 
 				plot = sample_plot)
 
-	return(p)
+	return(p, fold)
 
 
 
