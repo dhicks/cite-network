@@ -384,7 +384,7 @@ def plot_sample_dist(samples, observation, stat_label = '$Q$', p_label = None):
 							 'x': sample_dist.support})) + \
 			geom_line(color = 'blue') + \
 			geom_area(fill = 'blue', alpha = '.25') + \
-			geom_vline(aes(xintercept = modularity), color = 'red')
+			geom_vline(aes(xintercept = observation), color = 'red')
 	if p_label is not None:
 		# TODO:  adding a text label screws up the axes
 		pass
@@ -432,7 +432,7 @@ def modularity_sample_dist(net, n_core, obs_mod,
 	print('P-value of modularity: ' + str(p))
 
 	# Plot the sample distribution
-	sample_plot = plot_sample_dist(samples, modularity, p_label = p)
+	sample_plot = plot_sample_dist(samples, obs_mod, p_label = p)
 	
 	if show_plot:
 		print(sample_plot)
@@ -444,49 +444,43 @@ def modularity_sample_dist(net, n_core, obs_mod,
 
 
 
-# Load comparison networks
-phnet_infile = 'cit-HepPh.txt', 
-ptnet_infile = 'cit-HepTh.txt'
-
-phnet_outfile = 'phnet.graphml'
-ptnet_outfile = 'ptnet.graphml'
-
-#phnet = load_net(phnet_infile, core = False)[0]
-#ptnet = load_net(phnet_infile, core = False)[0]
-
-# Load networks for analysis
-#infiles = ['citenet0.graphml']
-infiles = ['autnet0.graphml']
-#infiles = ['autnet1.graphml']
-#infiles = ['citenet0.graphml', 'autnet0.graphml', 'autnet1.graphml']
-
-# Timestamp
-print(datetime.now())
-
-for infile in infiles:
-	# Load the network
-	net, outfile_pre, core_pmap, core_vertices = load_net(infile, core = True)
+def run_analysis(netfile):
+	# Timestamp
+	print(datetime.now())
 	
-	# Set up a filter for plotting purposes
+	# Load the network
+	net, outfile_pre, core_pmap, core_vertices = load_net(netfile + '.graphml', 
+															core = True)
+ 	# Set up a filter for plotting purposes
 	print('Adding filter')
-	# Distance from core set filter
-	net.set_directed(False)
-	extended_set_pmap = core_pmap.copy()
-	gt.infect_vertex_property(net, extended_set_pmap, vals=[True])
-	gt.infect_vertex_property(net, extended_set_pmap, vals=[True])
-	net.set_directed(True)
-	net.set_vertex_filter(extended_set_pmap)
+	# Recent papers filter for the citation net
+	if netfile == 'citenet0':
+		year = net.vp['year']
+		recent_list = [year[vertex] > 2005 for vertex in net.vertices()]
+		recent_pmap = net.new_vertex_property('boolean')
+		recent_pmap.a = np.array(recent_list)
+		net.set_vertex_filter(recent_pmap)
+	# Distance from core set for the author nets
+	else:
+		net.set_directed(False)
+		extended_set_pmap = core_pmap.copy()
+		gt.infect_vertex_property(net, extended_set_pmap, vals=[True])
+		gt.infect_vertex_property(net, extended_set_pmap, vals=[True])
+		net.set_vertex_filter(extended_set_pmap)
+
 	print('Filtered vertices: ' + str(net.num_vertices()))
+	print('Filtered edges: ' + str(net.num_edges()))
 	
 	# Calculate the plotting layout
 	print('Calculating layout')
+	# TODO: store layout in network and check whether it needs to be recalculated
 	#layout = gtdraw.radial_tree_layout(net, core_vertices[0])
-	layout = gtdraw.sfdp_layout(net, p = 4, verbose = True)
+	layout = gtdraw.sfdp_layout(net, C = .5, p = 6, verbose = True)
 	print('Plotting')
 	gtdraw.graphviz_draw(net, vcolor = core_pmap, pos = layout,
-							vsize = .2, size = (50, 50),
+							vsize = .1, size = (50, 50),
 							output = outfile_pre + '.net' + '.png')
-	net.set_vertex_filter(None)
+	#net.set_vertex_filter(None)
 	
 	# ECDF for out-degree distribution
 	degree_dist(net, core_vertices, outfile = outfile_pre, show_plot = False, save_plot = True)
@@ -501,8 +495,8 @@ for infile in infiles:
 	n_core = len(core_vertices)
 	# Construct a sampling distribution for the modularity statistic
 	#  And use it to calculate a p-value for the modularity
-# 	p = modularity_sample_dist(net, n_core, modularity, 
-# 								outfile = outfile_pre, show_plot = False)
+	p = modularity_sample_dist(net, n_core, modularity, 
+								outfile = outfile_pre, show_plot = False)
 	
 	# Complexity-theoretic partitioning
 	print('Complexity-theoretic partitioning')
@@ -514,7 +508,7 @@ for infile in infiles:
 	block_modularity = comm.modularity(net, part_block_pmap)
 	print('Partion modularity: ' + str(block_modularity))
 	
-	print('Plotting')
+	#print('Plotting')
 	#net.set_vertex_filter(extended_set_pmap)
 	#gtdraw.graphviz_draw(net, vcolor = part_block_pmap, pos = layout)
 	#net.set_vertex_filter(None)
@@ -527,3 +521,27 @@ for infile in infiles:
 	# Visually separate analyses
 	print('-'*40)
 	
+	
+# Comparison networks
+phnet_infile = 'cit-HepPh.txt', 
+ptnet_infile = 'cit-HepTh.txt'
+
+phnet_outfile = 'phnet.graphml'
+ptnet_outfile = 'ptnet.graphml'
+
+#phnet = load_net(phnet_infile, core = False)[0]
+#ptnet = load_net(phnet_infile, core = False)[0]
+
+
+if __name__ == '__main__':
+	# Load networks for analysis
+	#netfiles = ['citenet0.graphml']
+	#netfiles = ['autnet0.graphml']
+	netfiles = ['autnet1']
+	#netfiles = ['autnet1', 'autnet0', 'citenet0']
+
+	for netfile in netfiles:
+		logfile = netfile + '.log'
+		with open(logfile, 'w') as log:
+			# TODO: print ~> logging to logfile
+			run_analysis(netfile)
