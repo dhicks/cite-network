@@ -57,9 +57,15 @@ def summary(data):
 	'''
 	Report descriptive statistics for the 1D `data`
 	'''
+	minimum = min(data)
+	if type(minimum) is np.array:
+		minimum = min(data).item()
+	maximum = max(data)
+	if type(maximum) is np.array:
+		maximum = max(data).item()
 	stats = {'count' : int(len(data)),
-			'min': min(data).item(),
-			'max': max(data).item(),
+			'min': minimum,
+			'max': maximum,
 
 			'mean': np.average(data),
 			'sd': np.std(data),
@@ -72,7 +78,7 @@ def summary(data):
 			}
 	stats['iqr50'] = stats['q75'] - stats['q25']
 	stats['iqr90'] = stats['q95'] - stats['q05']
-	return(stats)
+	return(pd.Series(stats))
 	
 
 
@@ -355,6 +361,44 @@ def modularity_sample_dist(net, n_core, obs_mod,
 
 
 
+def optimal_sample_dist(net, obs_mod, 
+							n_samples = 500, seed_int = None,
+							show_plot = False, 
+							outfile = None, save_plot = True):
+	'''	
+	Generate a sample distribution for modularity. 
+	'''	
+	# Initialize a container for samples
+	samples = []
+	# Set a seed
+	if seed_int is not None:
+		seed(seed_int)
+	print('Generating ' + str(n_samples) + ' optimal partitions')
+	while len(samples) < n_samples:
+		# Generate an optimal partition
+		temp_part_pmap = comm.community_structure(net, n_iter = 100, n_spins = 2)
+		# Calculate the modularity and save it in `samples`
+		samples += [comm.modularity(net, temp_part_pmap)]
+		if len(samples) % 100 == 0:
+			print(len(samples))
+			
+	# Calculate p-value
+	p = p_sample(samples, obs_mod)
+	print('P-value of modularity: ' + str(p))
+
+	# Plot the sample distribution
+	sample_plot = plot_sample_dist(samples, obs_mod, p_label = p)
+	
+	if show_plot:
+		print(sample_plot)
+	if outfile is not None and save_plot:
+		ggsave(filename = outfile + '.mod_sample' + '.pdf', 
+				plot = sample_plot)
+
+	return(p)
+
+
+
 def run_analysis(netfile):
 	# Timestamp
 	print(datetime.now())
@@ -383,65 +427,73 @@ def run_analysis(netfile):
 	print('Filtered vertices: ' + str(net.num_vertices()))
 	print('Filtered edges: ' + str(net.num_edges()))
 	
-
-	# Plotting
-	# --------------------
-	# Calculate the plotting layout
-	print('Calculating layout')
-	#net.vp['layout'] = gtdraw.radial_tree_layout(net, core_vertices[0], r = 4)
-	net.vp['layout'] = gtdraw.sfdp_layout(net, C = .5, p = 6, verbose = True)
-	print('Plotting')
-	gtdraw.graphviz_draw(net, vcolor = core_pmap, pos = net.vp['layout'],
-							vsize = .2, size = (50, 50),
-							output = outfile_pre + '.net' + '.png'
-							)
-	#net.set_vertex_filter(None)
-	
-	# Vertex statistics
-	# --------------------
-	# ECDF for out-degree distribution
-	degree_dist(net, core_vertices, outfile = outfile_pre, show_plot = False, save_plot = True)
-	# ECDF for eigenvector centrality
-	ev_centrality_dist(net, core_vertices, outfile = outfile_pre, show_plot = False, save_plot = True)
+# 
+# 	# Plotting
+# 	# --------------------
+# 	# Calculate the plotting layout
+# 	print('Calculating layout')
+# 	#net.vp['layout'] = gtdraw.radial_tree_layout(net, core_vertices[0], r = 4)
+# 	net.vp['layout'] = gtdraw.sfdp_layout(net, C = .5, p = 6, verbose = True)
+# 	print('Plotting')
+# 	gtdraw.graphviz_draw(net, vcolor = core_pmap, pos = net.vp['layout'],
+# 							vsize = .2, size = (50, 50),
+# 							output = outfile_pre + '.net' + '.png'
+# 							)
+# 	#net.set_vertex_filter(None)
+# 	
+# 	# Vertex statistics
+# 	# --------------------
+# 	# ECDF for out-degree distribution
+# 	degree_dist(net, core_vertices, outfile = outfile_pre, show_plot = False, save_plot = True)
+# 	# ECDF for eigenvector centrality
+# 	ev_centrality_dist(net, core_vertices, outfile = outfile_pre, show_plot = False, save_plot = True)
 	
 	# Modularity
 	# --------------------
 	# Calculate modularity, using the core vertices as the partition
 	modularity = comm.modularity(net, core_pmap)
 	print('Observed modularity: ' + str(modularity))
-
-	# Calculate the number of core vertices
-	n_core = len(core_vertices)
-	# Construct a sampling distribution for the modularity statistic
-	#  And use it to calculate a p-value for the modularity
-	p = modularity_sample_dist(net, n_core, modularity, 
-								outfile = outfile_pre, show_plot = False)
-	
-	# Complexity-theoretic partitioning
-	print('Information-theoretic partitioning')
-	# Calculate the partition
-	part_block = comm.minimize_blockmodel_dl(net, min_B = 2, max_B = 2)
-	# Extract the block memberships as a pmap
-	net.vp['partition'] = part_block.get_blocks()
-	# Calculate the modularity
-	block_modularity = comm.modularity(net, net.vp['partition'])
-	print('Partion modularity: ' + str(block_modularity))
-	
-	print('Plotting')
-	size_pmap = net.new_vertex_property('float', vals = .2 + .5 * core_pmap.a)
-	gtdraw.graphviz_draw(net, vcolor = net.vp['partition'], pos = net.vp['layout'],
-							vsize = size_pmap, size = (50, 50),
-							output = outfile_pre + '.partition' + '.png'
-							)
-	#net.set_vertex_filter(None)
+# 
+# 	# Calculate the number of core vertices
+# 	n_core = len(core_vertices)
+# 	# Construct a sampling distribution for the modularity statistic
+# 	#  And use it to calculate a p-value for the modularity
+# 	p = modularity_sample_dist(net, n_core, modularity, 
+# 								outfile = outfile_pre, show_plot = False)
+# 	
+# 	# Complexity-theoretic partitioning
+# 	print('Information-theoretic partitioning')
+# 	# Calculate the partition
+# 	part_block = comm.minimize_blockmodel_dl(net, min_B = 2, max_B = 2)
+# 	# Extract the block memberships as a pmap
+# 	net.vp['partition'] = part_block.get_blocks()
+# 	# Calculate the modularity
+# 	block_modularity = comm.modularity(net, net.vp['partition'])
+# 	print('Partion modularity: ' + str(block_modularity))
+# 	
+# 	print('Plotting')
+# 	size_pmap = net.new_vertex_property('float', vals = .2 + .5 * core_pmap.a)
+# 	gtdraw.graphviz_draw(net, vcolor = net.vp['partition'], pos = net.vp['layout'],
+# 							vsize = size_pmap, size = (50, 50),
+# 							output = outfile_pre + '.partition' + '.png'
+# 							)
+# 	#net.set_vertex_filter(None)
 	
 	# Modularity optimization
-# 	part_block_pmap = gt.community_structure(net, n_iter = 500, n_spins = 2)
+# 	samples = []
+# 	while len(samples) < 100:
+# 		mod_op_pmap = comm.community_structure(net, n_iter = 100, n_spins = 2)
+# 		this_modularity = comm.modularity(net, mod_op_pmap)
+# 		samples += [this_modularity]
+# 		print(len(samples))
+# 	print(summary(np.array(samples)))
+#	p = optimal_sample_dist(net, modularity, n_samples = 300, 
+# 								outfile = outfile_pre, show_plot = False)
 
-	# Comparison networks
+	# TODO: Comparison networks
 
 	# Save output
-	net.save(netfile + '.out' + '.graphml')
+	#net.save(netfile + '.out' + '.graphml')
 
 	# Timestamp
 	print(datetime.now())
