@@ -1,3 +1,10 @@
+'''
+Translate `cit-HepPh.txt` and `cit-HepTh.txt` into `graphml` files
+
+https://snap.stanford.edu/data/cit-HepPh.html
+https://snap.stanford.edu/data/cit-HepTh.html
+'''
+
 import graph_tool as gt
 import graph_tool.community as comm
 
@@ -15,8 +22,8 @@ ptnet_infile = 'cit-HepTh.txt'
 phnet_outfile = 'phnet.graphml'
 ptnet_outfile = 'ptnet.graphml'
 
-phnet_samplesfile = 'phnet_samples.json'
-ptnet_samplesfile = 'ptnet_samples.json'
+# phnet_samplesfile = 'phnet_samples.json'
+# ptnet_samplesfile = 'ptnet_samples.json'
 
 nets = [(phnet_infile, phnet_outfile, phnet_samplesfile), 
 		(ptnet_infile, ptnet_outfile, ptnet_samplesfile)]
@@ -92,29 +99,29 @@ for infile, outfile, samplesfile in nets:
 	#print(len(id_to_gt))
 	print('total vertices: ' + str(net.num_vertices()))
 	print('total edges: ' + str(net.num_edges()))
-
-	# How many samples to collect?
-	n_samples = 1000
-	# Initialize a container for them
-	samples = []
-	# And set a seed
-	seed = 13579
-	print('generating ' + str(n_samples) + ' random partitions')
-	while len(samples) < n_samples:
-		# Generate a random partition
-		temp_part = sample(list(id_to_gt), 200)
-		#print(temp_part)
-		# `modularity` needs the groups passed as a PropertyMap
-		temp_part_pmap = net.new_vertex_property('bool')
-		for vertex in net.vertices():
-			temp_part_pmap[vertex] = id[vertex] in temp_part
-		#print(comm.modularity(net, temp_part_pmap))
-		# Calculate the modularity and save it in `samples`
-		samples += [comm.modularity(net, temp_part_pmap)]
-		if len(samples) % 50 == 0:
-			print(len(samples))
-	print('finished.  writing sample modularities to disc.')
-	with open(samplesfile, 'w') as writefile:
-		json.dump(samples, writefile)
-	print('modularity mean: ' + str(np.mean(samples)))
-	print('modularity sd: ' + str(np.std(samples)))
+# 
+# 	# How many samples to collect?
+# 	n_samples = 1000
+# 	# Initialize a container for them
+# 	samples = []
+# 	# And set a seed
+# 	seed = 13579
+# 	print('generating ' + str(n_samples) + ' random partitions')
+# 	while len(samples) < n_samples:
+# 		# Generate a random partition
+# 		temp_part = sample(list(id_to_gt), 200)
+# 		#print(temp_part)
+# 		# `modularity` needs the groups passed as a PropertyMap
+# 		temp_part_pmap = net.new_vertex_property('bool')
+# 		for vertex in net.vertices():
+# 			temp_part_pmap[vertex] = id[vertex] in temp_part
+# 		#print(comm.modularity(net, temp_part_pmap))
+# 		# Calculate the modularity and save it in `samples`
+# 		samples += [comm.modularity(net, temp_part_pmap)]
+# 		if len(samples) % 50 == 0:
+# 			print(len(samples))
+# 	print('finished.  writing sample modularities to disc.')
+# 	with open(samplesfile, 'w') as writefile:
+# 		json.dump(samples, writefile)
+# 	print('modularity mean: ' + str(np.mean(samples)))
+# 	print('modularity sd: ' + str(np.std(samples)))
