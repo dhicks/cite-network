@@ -5,6 +5,7 @@ import graph_tool.draw as gtdraw
 import graph_tool.stats as gtstats
 
 from ggplot import *
+from ggplot.utils.exceptions import GgplotError
 
 import bottleneck as bn
 from datetime import datetime
@@ -293,6 +294,7 @@ def plot_sample_dist(samples, observation, stat_label = '$Q$', p_label = None):
 	sample_dist.fit()
 	# Normalize
 	sample_dist.norm = sample_dist.density / sum(sample_dist.density)
+	#print(sample_dist.support)
 	
 	sample_dist_plot = \
 		ggplot(aes(x = 'x', y = 'density', ymax = 'density', ymin = 0),
@@ -392,16 +394,21 @@ def optimal_sample_dist(net, obs_mod,
 
 	# Fold of observation relative to sampling distribution mean
 	fold = obs_mod / np.mean(samples)
+	if abs(fold) < 1:
+		fold = 1 / fold
 	print('Fold of observed modularity: ' + str(fold))
 
 	# Plot the sample distribution
-	sample_plot = plot_sample_dist(samples, obs_mod, p_label = p)
+	try:
+		sample_plot = plot_sample_dist(samples, obs_mod, p_label = p)
 	
-	if show_plot:
-		print(sample_plot)
-	if outfile is not None and save_plot:
-		ggsave(filename = outfile + '.opt_sample' + '.pdf', 
-				plot = sample_plot)
+		if show_plot:
+			print(sample_plot)
+		if outfile is not None and save_plot:
+			ggsave(filename = outfile + '.opt_sample' + '.pdf', 
+					plot = sample_plot)
+	except GgplotError:
+		print('Caught `GgplotError`. Skipping plot.')
 
 	return(p, fold)
 
