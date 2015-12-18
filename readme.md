@@ -20,12 +20,7 @@ This repository contains several tools for citation network construction and ana
 	- The "comparison networks" are citation networks grabbed from arXiv, with papers from January 1993 to April 2003.  They can be found [here](https://snap.stanford.edu/data/cit-HepPh.html) and [here](https://snap.stanford.edu/data/cit-HepTh.html).  
 
 
-# Contact Information
-
-Daniel Hicks, [hicks.daniel.j@gmail.com]()
-
-
-# Major To-dos:
+# Major Todos
 
 * Write a script, primarily for interactive use, to generate paper-quality plots and tables.  
 
