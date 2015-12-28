@@ -19,7 +19,7 @@ from statsmodels.distributions.empirical_distribution import ECDF as ecdf
 from statsmodels.nonparametric.kde import KDEUnivariate as kde
 
 
-def load_net(infile, core = False):
+def load_net(infile, core = False, filter = False):
 	'''
 	Load a `graphml` file.  
 	Returns the graph_tool Graph, a prefix for output files, and 
@@ -46,6 +46,35 @@ def load_net(infile, core = False):
 	if core:
 		print('Core vertices: ' + str(len(core_vertices)))
 	print('Edges: ' + str(net.num_edges()))
+	
+	if core and filter:
+		# Add a filter
+		print('Adding filter')
+		# Recent papers filter for the citation net
+		if netfile == 'citenet0':
+			year = net.vp['year']
+			recent_list = [year[vertex] > 2005 for vertex in net.vertices()]
+			recent_pmap = net.new_vertex_property('boolean')
+			recent_pmap.a = np.array(recent_list)
+			net.set_vertex_filter(recent_pmap)
+		# Distance from core set for the author nets
+		else:
+			net.set_directed(False)
+			extended_set_pmap = core_pmap.copy()
+			gt.infect_vertex_property(net, extended_set_pmap, vals=[True])
+			gt.infect_vertex_property(net, extended_set_pmap, vals=[True])
+			net.set_vertex_filter(extended_set_pmap)
+		# Remove everything caught in the filter
+		net.purge_vertices()
+		# Rebuild core
+		core_pmap = net.vertex_properties['core']
+		core_vertices = [vertex for vertex in net.vertices() if core_pmap[vertex]]
+
+		print('Filtered vertices: ' + str(net.num_vertices()))
+		print('Filtered edges: ' + str(net.num_edges()))
+		print('Filtered core: ' + str(len(core_vertices)))
+	elif filter and not core:
+		print('Filter = true with core = false')
 	
 	if core:
 		return net, outfile_pre, core_pmap, core_vertices
@@ -524,6 +553,17 @@ def run_analysis(netfile, compnet_files):
 								show_plot = False)
 								
   	# Save network with analysis results
+	# Save in graph-tool's binary format
+	net.save(netfile + '.out' + '.gt')
+	# Replace vector-type properties with strings
+	net.list_properties()
+	properties = net.vertex_properties
+	for property_key in properties.keys():
+		property = properties[property_key]
+		if 'vector' in property.value_type():
+			properties[property_key] = \
+				property.copy(value_type = 'string')
+	# Save as graphml
 	net.save(netfile + '.out' + '.graphml')
 
 	# Timestamp
