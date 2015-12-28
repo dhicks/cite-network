@@ -83,6 +83,25 @@ def load_net(infile, core = False, filter = False):
 
 
 
+def layout_and_plot(net, color_pmap, size_pmap = None, filename_mod = '.net'):
+	'''
+	Calculate the plotting layout, and plot using color_pmap
+	'''
+	if 'layout' not in net.vp:
+		# Calculate the plotting layout
+		print('Calculating layout')
+		#net.vp['layout'] = gtdraw.radial_tree_layout(net, core_vertices[0], r = 4)
+		net.vp['layout'] = gtdraw.sfdp_layout(net, C = .5, p = 6, verbose = True)
+	if size_pmap is None:
+		size_pmap = net.new_vertex_property('float', val = .2)
+	print('Plotting')
+	gtdraw.graphviz_draw(net, vcolor = color_pmap, pos = net.vp['layout'],
+							vsize = size_pmap, size = (50, 50),
+							output = outfile_pre + filename_mod + '.png'
+							)
+	return
+
+
 def summary(data):
 	'''
 	Report descriptive statistics for the 1D `data`
@@ -451,40 +470,11 @@ def run_analysis(netfile, compnet_files):
 	# Load the network
 	# --------------------
 	net, outfile_pre, core_pmap, core_vertices = load_net(netfile + '.graphml', 
- 															core = True)
- 	# Add a filter
-	print('Adding filter')
-	# Recent papers filter for the citation net
-	if netfile == 'citenet0':
-		year = net.vp['year']
-		recent_list = [year[vertex] > 2005 for vertex in net.vertices()]
-		recent_pmap = net.new_vertex_property('boolean')
-		recent_pmap.a = np.array(recent_list)
-		net.set_vertex_filter(recent_pmap)
-	# Distance from core set for the author nets
-	else:
-		net.set_directed(False)
-		extended_set_pmap = core_pmap.copy()
-		gt.infect_vertex_property(net, extended_set_pmap, vals=[True])
-		gt.infect_vertex_property(net, extended_set_pmap, vals=[True])
-		net.set_vertex_filter(extended_set_pmap)
-
-	print('Filtered vertices: ' + str(net.num_vertices()))
-	print('Filtered edges: ' + str(net.num_edges()))
-	
-
-	# Plotting
-	# --------------------
-	# Calculate the plotting layout
-	print('Calculating layout')
-	#net.vp['layout'] = gtdraw.radial_tree_layout(net, core_vertices[0], r = 4)
-	net.vp['layout'] = gtdraw.sfdp_layout(net, C = .5, p = 6, verbose = True)
-	print('Plotting')
-	gtdraw.graphviz_draw(net, vcolor = core_pmap, pos = net.vp['layout'],
-							vsize = .2, size = (50, 50),
-							output = outfile_pre + '.net' + '.png'
-							)
-	#net.set_vertex_filter(None)
+ 															core = True,
+ 															filter = True)
+ 	
+ 	# Plotting
+	layout_and_plot(net, core_pmap)
 	
 	# Vertex statistics
 	# --------------------
@@ -509,7 +499,7 @@ def run_analysis(netfile, compnet_files):
 								outfile = outfile_pre, 
 								show_plot = False, save_plot = True)
 	
-	# Complexity-theoretic partitioning
+	# Information-theoretic partitioning
 	print('Information-theoretic partitioning')
 	# Calculate the partition
 	part_block = comm.minimize_blockmodel_dl(net, min_B = 2, max_B = 2)
@@ -519,13 +509,8 @@ def run_analysis(netfile, compnet_files):
 	block_modularity = comm.modularity(net, net.vp['partition'])
 	print('Partion modularity: ' + str(block_modularity))
 	
-	print('Plotting')
 	size_pmap = net.new_vertex_property('float', vals = .2 + .5 * core_pmap.a)
-	gtdraw.graphviz_draw(net, vcolor = net.vp['partition'], pos = net.vp['layout'],
-							vsize = size_pmap, size = (50, 50),
-							output = outfile_pre + '.partition' + '.png'
-							)
-	#net.set_vertex_filter(None)
+	layout_and_plot(net, net.vp['partition'], size_pmap = size_pmap, filename_mod = '.partition')
 	
 	# Modularity optimization
 	optimal_sample_dist(net, modularity, #n_samples = 300, 
