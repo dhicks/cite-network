@@ -4,6 +4,8 @@ import graph_tool.community as comm
 import graph_tool.draw as gtdraw
 import graph_tool.stats as gtstats
 
+from matplotlib.cm import OrRd_r, OrRd	# Color schemes used in plotting nets
+
 from ggplot import *
 from ggplot.utils.exceptions import GgplotError
 
@@ -13,7 +15,7 @@ from matplotlib import pyplot as plt
 import numpy as np
 import pandas as pd
 from random import sample, seed
-#import scipy.stats as stats
+import scipy.stats as spstats
 
 from statsmodels.distributions.empirical_distribution import ECDF as ecdf
 from statsmodels.nonparametric.kde import KDEUnivariate as kde
@@ -83,23 +85,30 @@ def load_net(infile, core = False, filter = False):
 
 
 
-def layout_and_plot(net, color_pmap, size_pmap = None, filename_mod = '.net'):
+def layout_and_plot(net, color_pmap, outfile_pre, filename_mod = '.net',
+					size_pmap = None):
 	'''
-	Calculate the plotting layout, and plot using color_pmap
+	Plot
 	'''
-	if 'layout' not in net.vp:
-		# Calculate the plotting layout
-		print('Calculating layout')
-		#net.vp['layout'] = gtdraw.radial_tree_layout(net, core_vertices[0], r = 4)
-		net.vp['layout'] = gtdraw.sfdp_layout(net, C = .5, p = 6, verbose = True)
+	# Define a default size
 	if size_pmap is None:
-		size_pmap = net.new_vertex_property('float', val = .2)
-	print('Plotting')
-	gtdraw.graphviz_draw(net, vcolor = color_pmap, pos = net.vp['layout'],
-							vsize = size_pmap, size = (50, 50),
-							output = outfile_pre + filename_mod + '.png'
-							)
-	return
+		size_pmap = net.new_vertex_property('float', val = .05)
+	# If a layout is already defined, use it
+	if 'layout' in net.vp:
+		gtdraw.graphviz_draw(net, vcolor = color_pmap, vcmap = OrRd_r,
+								vsize = size_pmap,
+								penwidth = .75,
+								pos = net.vp['layout'], pin = True,
+								output = outfile_pre + filename_mod + '.png')
+		return net.vp['layout']
+	# Otherwise graphviz_draw calculates and returns one
+	else:
+		layout = gtdraw.graphviz_draw(net, vcolor = color_pmap, vcmap = OrRd_r,
+									vsize = size_pmap,
+									penwidth = .75,
+									output = outfile_pre + filename_mod + '.png')
+		return layout
+
 
 
 def summary(data):
@@ -395,6 +404,7 @@ def modularity_sample_dist(net, n_core, obs_mod,
 			print(len(samples))
 			
 	# Calculate p-value
+	print('Mean sample modularity: ' + np.mean(samples))
 	p = p_sample(samples, obs_mod)
 	print('P-value of observed modularity: ' + str(p))
 
@@ -437,11 +447,13 @@ def optimal_sample_dist(net, obs_mod,
 			print(len(samples))
 			
 	# Calculate p-value
+	sample_mean = np.mean(samples)
+	print('Mean sample modularity: ' + str(sample_mean))
 	p = p_sample(samples, obs_mod)
 	print('P-value of modularity: ' + str(p))
 
 	# Fold of observation relative to sampling distribution mean
-	fold = obs_mod / np.mean(samples)
+	fold = obs_mod / sample_mean
 	if abs(fold) < 1:
 		fold = 1 / fold
 	print('Fold of observed modularity: ' + str(fold))
@@ -474,7 +486,14 @@ def run_analysis(netfile, compnet_files):
  															filter = True)
  	
  	# Plotting
-	layout_and_plot(net, core_pmap)
+	print('Plotting')
+	layout = layout_and_plot(net, core_pmap, outfile_pre)
+	# Store the layout in the net
+	net.vp['layout'] = layout
+	# Show only the core vertices	
+	net.set_vertex_filter(core_pmap)
+	layout_and_plot(net, core_pmap, outfile_pre, filename_mod = '.core.net')
+	net.set_vertex_filter(None)
 	
 	# Vertex statistics
 	# --------------------
@@ -495,9 +514,9 @@ def run_analysis(netfile, compnet_files):
 	n_core = len(core_vertices)
 	# Construct a sampling distribution for the modularity statistic
 	#  And use it to calculate a p-value for the modularity
-	modularity_sample_dist(net, n_core, modularity, 
-								outfile = outfile_pre, 
-								show_plot = False, save_plot = True)
+# 	modularity_sample_dist(net, n_core, modularity, 
+# 								outfile = outfile_pre, 
+# 								show_plot = False, save_plot = True)
 	
 	# Information-theoretic partitioning
 	print('Information-theoretic partitioning')
@@ -509,35 +528,38 @@ def run_analysis(netfile, compnet_files):
 	block_modularity = comm.modularity(net, net.vp['partition'])
 	print('Partion modularity: ' + str(block_modularity))
 	
-	size_pmap = net.new_vertex_property('float', vals = .2 + .5 * core_pmap.a)
-	layout_and_plot(net, net.vp['partition'], size_pmap = size_pmap, filename_mod = '.partition')
+	print('Plotting')
+	size_pmap = net.new_vertex_property('float', vals = .1 + .4 * core_pmap.a)
+	layout_and_plot(net, net.vp['partition'], outfile_pre,
+						size_pmap = size_pmap, filename_mod = '.partition')
 	
 	# Modularity optimization
-	optimal_sample_dist(net, modularity, #n_samples = 300, 
- 								outfile = outfile_pre, 
-								show_plot = False, save_plot = True)
-
-	# Comparison networks
-	# --------------------
-	for compnet_file in compnet_files:
-		# Load the comparison network
-		compnet, compnet_outfile = load_net(compnet_file)
-		# Set it to the same directedness as the network of interest
-		compnet.set_directed(net.is_directed())
-		# Size of compnet
-		n_compnet = compnet.num_vertices()
-		# Num vertices in compnet to use in each random partition
-		k_compnet = round(n_core / net.num_vertices() * n_compnet)
-		# Sample distribution based on random partition
-		modularity_sample_dist(compnet, k_compnet, modularity, 
-								outfile = outfile_pre + '.' + compnet_outfile, 
-								show_plot = False)
-		# Sample distribution based on optimizing modularity
-		optimal_sample_dist(compnet, modularity, #n_samples = 300, 
-								outfile = outfile_pre + '.' + compnet_outfile,  
-								show_plot = False)
+# 	optimal_sample_dist(net, modularity, #n_samples = 300, 
+#  								outfile = outfile_pre, 
+# 								show_plot = False, save_plot = True)
+# 
+# 	# Comparison networks
+# 	# --------------------
+# 	for compnet_file in compnet_files:
+# 		# Load the comparison network
+# 		compnet, compnet_outfile = load_net(compnet_file)
+# 		# Set it to the same directedness as the network of interest
+# 		compnet.set_directed(net.is_directed())
+# 		# Size of compnet
+# 		n_compnet = compnet.num_vertices()
+# 		# Num vertices in compnet to use in each random partition
+# 		k_compnet = round(n_core / net.num_vertices() * n_compnet)
+# 		# Sample distribution based on random partition
+# 		modularity_sample_dist(compnet, k_compnet, modularity, 
+# 								outfile = outfile_pre + '.' + compnet_outfile, 
+# 								show_plot = False)
+# 		# Sample distribution based on optimizing modularity
+# 		optimal_sample_dist(compnet, modularity, #n_samples = 300, 
+# 								outfile = outfile_pre + '.' + compnet_outfile,  
+# 								show_plot = False)
 								
   	# Save network with analysis results
+	print('Saving')
 	# Save in graph-tool's binary format
 	net.save(netfile + '.out' + '.gt')
 	# Replace vector-type properties with strings
@@ -559,18 +581,18 @@ def run_analysis(netfile, compnet_files):
 	
 if __name__ == '__main__':
 	# Networks for analysis
-	#netfiles = ['citenet0']
+	netfiles = ['citenet0']
 	#netfiles = ['autnet0']
 	#netfiles = ['autnet1']
-	netfiles = ['autnet1', 'autnet0', 'citenet0']
+	#netfiles = ['autnet1', 'autnet0', 'citenet0']
 
 	# Comparison networks
 	#compnet_files = ['phnet.graphml']
 	compnet_files = ['phnet.graphml', 'ptnet.graphml']
 
+	print('-'*40)
 	for netfile in netfiles:
 		#logfile = netfile + '.log'
 		#with open(logfile, 'w') as log:
 		# TODO: print ~> logging to logfile
-		print('-'*40)
 		run_analysis(netfile, compnet_files)
