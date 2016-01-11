@@ -1,14 +1,30 @@
+# -*- coding: utf-8 -*-
+'''
+Using the `graphml` files and two "comparison networks," conduct the actual 
+network analysis.  
+
+The "comparison networks" are citation networks grabbed from arXiv, with papers 
+from January 1993 to April 2003.  They can be found at 
+<https://snap.stanford.edu/data/cit-HepPh.html> and 
+<https://snap.stanford.edu/data/cit-HepTh.html>.  
+'''
+
+# Graph-tool modules
 import graph_tool as gt
 import graph_tool.centrality as gtcentral
 import graph_tool.community as comm
 import graph_tool.draw as gtdraw
 import graph_tool.stats as gtstats
 
-from matplotlib.cm import OrRd_r, OrRd	# Color schemes used in plotting nets
+# Color schemes used in plotting nets
+from matplotlib.cm import OrRd_r, OrRd
 
+# Python port of ggplot
+#  Very incomplete and buggy! 
 from ggplot import *
 from ggplot.utils.exceptions import GgplotError
 
+# Other things we'll need
 import bottleneck as bn
 from datetime import datetime
 from matplotlib import pyplot as plt
@@ -24,8 +40,11 @@ from statsmodels.nonparametric.kde import KDEUnivariate as kde
 def load_net(infile, core = False, filter = False):
 	'''
 	Load a `graphml` file.  
-	Returns the graph_tool Graph, a prefix for output files, and 
-	 (if core is True) the property map for core vertices
+	:param infile: The `graphml` file to load.
+	:param core: Does the net contain a core vertex property map?  
+	:filter: Apply a filter? 
+	:return: the graph_tool `Graph`, a prefix for output files, and 
+		(if core is True) the property map for core vertices
 	'''
 	# Output filename
 	#  Prefix only, not extension: 
@@ -88,7 +107,12 @@ def load_net(infile, core = False, filter = False):
 def layout_and_plot(net, color_pmap, outfile_pre, filename_mod = '.net',
 					size_pmap = None):
 	'''
-	Plot
+	Plot the net, using a predefined layout if it's included as a vector property.
+	:param net: The network to plot.
+	:param color_pmap: Property map on `net` to color nodes.
+	:size_pmap: Property map on `net` to set size of verticies.  
+	:param outfile_pre: Prefix for output filename.
+	:param filename_mod: Extension to use on the output filename.
 	'''
 	# Define a default size
 	if size_pmap is None:
@@ -113,7 +137,13 @@ def layout_and_plot(net, color_pmap, outfile_pre, filename_mod = '.net',
 
 def summary(data):
 	'''
-	Report descriptive statistics for the 1D `data`
+	Report several descriptive statistics for the 1D `data`.
+	:param data: The Python list or numpy array to summarize.
+	:return: A Pandas Series with the following stats:
+		minimum value, maximum value,
+		mean, standard deviation,
+		5, 25, 50 (median), 75, and 95 percentiles, 
+		50 and 90 interquartile range
 	'''
 	minimum = min(data)
 	if type(minimum) is np.array:
@@ -140,9 +170,20 @@ def summary(data):
 	
 
 
-def degree_dist(net, core, show_plot = False, outfile = None, save_plot = True):
+def degree_dist(net, core, show_plot = False, save_plot = True, outfile = None):
 	'''
-	Plot out-degree empirical CDF
+	Calculate out degree, an empirical CDF, and ranking for each vertex.  
+	Plot both degree x empirical CDF and degree x ranking, highlighting core vertices.
+	Note that the plot is saved as a file only if *both* `save_plot` is true and
+	output filename are given.  
+	
+	:param net: The network whose degree distribution we'd like to plot
+	:param core: The property map of core vertices
+	:param show_plot: Show the plot on the screen?
+	:param save_plot: Save the plot as a file?
+	:param outfile: Filename to use to save the plot
+	
+	:return: The CDF and ranking plots. 
 	'''
 	# Build degree distribution
 	# Out degree for every vertex
@@ -233,11 +274,21 @@ def degree_dist(net, core, show_plot = False, outfile = None, save_plot = True):
 
 
 
-def ev_centrality_dist(net, core, show_plot = False, outfile = None, save_plot = True):
+def ev_centrality_dist(net, core, show_plot = False, save_plot = True, outfile = None):
 	'''
-	Calculate and plot eigenvector centrality distributions. 
-	'''
-	# Calculate eigenvector centrality and write them into the graph
+	Calculate eigenvector centrality, an empirical CDF, and ranking for each vertex.  
+	Plot both centrality x empirical CDF and centrality x ranking, highlighting core vertices.
+	Note that the plot is saved as a file only if *both* `save_plot` is true and
+	output filename are given.  
+	
+	:param net: The network whose degree distribution we'd like to plot
+	:param core: The property map of core vertices
+	:param show_plot: Show the plot on the screen?
+	:param save_plot: Save the plot as a file?
+	:param outfile: Filename to use to save the plot
+	
+	:return: The CDF and ranking plots. 
+	'''# Calculate eigenvector centrality and write it into the graph
 	print('Calculating eigenvector centrality')
 	net.vp['evc'] = gtcentral.eigenvector(net, epsilon=1e-03)[1]
 	print('Done')
@@ -334,6 +385,10 @@ def p_sample(samples, observation):
 	'''
 	Given a list of samples and an actual observation, 
 	calculate the p-value of the observation against the sample distribution.
+	
+	:param samples: A list or numpy array of sample values.
+	:param observation: The observation to compare against.
+	:return: The p-value.  Left/right tail is chosen automatically to minimize p. 
 	'''
 	sample_ecdf = ecdf(samples)
 	p = sample_ecdf(observation)
@@ -345,6 +400,15 @@ def plot_sample_dist(samples, observation, stat_label = '$Q$', p_label = None):
 	'''
 	Given a list of samples and an actual observation, 
 	build a plot for the sample distribution.
+	
+	:param samples: The list or numpy array of samples.
+	:param observation: The actual observation to plot against.
+	:param stat_label: The string to label the horizontal axis.  
+	:p_label: P-value to label on the plot as text.  
+		Note that text labels are buggy in the current version of ggplot, 
+		so this does nothing right now.  
+
+	:return: The sample distribution plot. 
 	''' 
 	# Get the kernel density estimate
 	sample_dist = kde(samples)
@@ -378,9 +442,18 @@ def plot_sample_dist(samples, observation, stat_label = '$Q$', p_label = None):
 def modularity_sample_dist(net, n_core, obs_mod, 
 							n_samples = 1000, seed_int = None,
 							show_plot = False, 
-							outfile = None, save_plot = True):
+							save_plot = True, outfile = None):
 	'''	
-	Generate a sample distribution for modularity. 
+	Generate a sample distribution for modularity using sets of random nodes. 
+	:param net: Network of interest
+	:param n_core: Number of core vertices
+	:param obs_mod: Observed modularity
+	:param n_samples = 1000: Number of samples to draw
+	:param seed_int: RNG seed
+	:param show_plot: Show the plot on the screen?
+	:param save_plot: Save the plot to a file?
+	:param outfile: Filename to save the plot
+	:return: p-value, fold induction of observation against sample
 	'''	
 	# Initialize a container for samples
 	samples = []
@@ -428,11 +501,21 @@ def modularity_sample_dist(net, n_core, obs_mod,
 def optimal_sample_dist(net, obs_mod, 
 							n_samples = 500, seed_int = None,
 							show_plot = False, 
-							outfile = None, save_plot = True):
+							save_plot = True, outfile = None):
 	'''	
-	Generate a sample distribution for modularity. 
+	Generate a sample distribution for modularity using an algorithm that 
+	tried to optimize modularity. 
+	:param net: Network of interest
+	:param n_core: Number of core vertices
+	:param obs_mod: Observed modularity
+	:param n_samples = 1000: Number of samples to draw
+	:param seed_int: RNG seed
+	:param show_plot: Show the plot on the screen?
+	:param save_plot: Save the plot to a file?
+	:param outfile: Filename to save the plot
+	:return: p-value, fold induction of observation against sample
 	'''	
-	# Initialize a container for samples
+# Initialize a container for samples
 	samples = []
 	# Set a seed
 	if seed_int is not None:
@@ -475,6 +558,13 @@ def optimal_sample_dist(net, obs_mod,
 
 
 def run_analysis(netfile, compnet_files):
+	'''
+	Run the analysis.  
+	:param netfile: Filename of the network to analyze
+	:param compnet_files: List of filenames of the comparison networks, viz.,
+		the high-energy physics networks.  
+	'''
+	
 	# Timestamp
 	# --------------------
 	print(datetime.now())
@@ -514,9 +604,9 @@ def run_analysis(netfile, compnet_files):
 	n_core = len(core_vertices)
 	# Construct a sampling distribution for the modularity statistic
 	#  And use it to calculate a p-value for the modularity
-# 	modularity_sample_dist(net, n_core, modularity, 
-# 								outfile = outfile_pre, 
-# 								show_plot = False, save_plot = True)
+	modularity_sample_dist(net, n_core, modularity, 
+								outfile = outfile_pre, 
+								show_plot = False, save_plot = True)
 	
 	# Information-theoretic partitioning
 	print('Information-theoretic partitioning')
@@ -534,31 +624,15 @@ def run_analysis(netfile, compnet_files):
 						size_pmap = size_pmap, filename_mod = '.partition')
 	
 	# Modularity optimization
-# 	optimal_sample_dist(net, modularity, #n_samples = 300, 
-#  								outfile = outfile_pre, 
-# 								show_plot = False, save_plot = True)
-# 
-# 	# Comparison networks
-# 	# --------------------
-# 	for compnet_file in compnet_files:
-# 		# Load the comparison network
-# 		compnet, compnet_outfile = load_net(compnet_file)
-# 		# Set it to the same directedness as the network of interest
-# 		compnet.set_directed(net.is_directed())
-# 		# Size of compnet
-# 		n_compnet = compnet.num_vertices()
-# 		# Num vertices in compnet to use in each random partition
-# 		k_compnet = round(n_core / net.num_vertices() * n_compnet)
-# 		# Sample distribution based on random partition
-# 		modularity_sample_dist(compnet, k_compnet, modularity, 
-# 								outfile = outfile_pre + '.' + compnet_outfile, 
-# 								show_plot = False)
-# 		# Sample distribution based on optimizing modularity
-# 		optimal_sample_dist(compnet, modularity, #n_samples = 300, 
-# 								outfile = outfile_pre + '.' + compnet_outfile,  
-# 								show_plot = False)
-								
-  	# Save network with analysis results
+	optimal_sample_dist(net, modularity, #n_samples = 300, 
+ 								outfile = outfile_pre, 
+								show_plot = False, save_plot = True)
+
+
+	# Save results
+	# --------------------
+	# The above covers all of the analysis to be written into the output files,
+	#  so we'll go ahead and save things now.  
 	print('Saving')
 	# Save in graph-tool's binary format
 	net.save(netfile + '.out' + '.gt')
@@ -573,7 +647,30 @@ def run_analysis(netfile, compnet_files):
 	# Save as graphml
 	net.save(netfile + '.out' + '.graphml')
 
+
+	# Comparison networks
+	# --------------------
+	for compnet_file in compnet_files:
+		# Load the comparison network
+		compnet, compnet_outfile = load_net(compnet_file)
+		# Set it to the same directedness as the network of interest
+		compnet.set_directed(net.is_directed())
+		# Size of compnet
+		n_compnet = compnet.num_vertices()
+		# Num vertices in compnet to use in each random partition
+		k_compnet = round(n_core / net.num_vertices() * n_compnet)
+		# Sample distribution based on random partition
+		modularity_sample_dist(compnet, k_compnet, modularity, 
+								outfile = outfile_pre + '.' + compnet_outfile, 
+								show_plot = False)
+		# Sample distribution based on optimizing modularity
+		optimal_sample_dist(compnet, modularity, #n_samples = 300, 
+								outfile = outfile_pre + '.' + compnet_outfile,  
+								show_plot = False)
+
+
 	# Timestamp
+	# --------------------
 	print(datetime.now())
 	# Visually separate analyses
 	print('-'*40)
@@ -581,10 +678,10 @@ def run_analysis(netfile, compnet_files):
 	
 if __name__ == '__main__':
 	# Networks for analysis
-	netfiles = ['citenet0']
+	#netfiles = ['citenet0']
 	#netfiles = ['autnet0']
 	#netfiles = ['autnet1']
-	#netfiles = ['autnet1', 'autnet0', 'citenet0']
+	netfiles = ['autnet1', 'autnet0', 'citenet0']
 
 	# Comparison networks
 	#compnet_files = ['phnet.graphml']

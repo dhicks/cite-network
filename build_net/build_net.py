@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 '''
-This module uses the dataset built by `run_scrape` to build a citation 
-network in GEXF format. 
+Using the metadata retrieved from Scopus, build citation and coauthor networks.  
+Each of the resulting `graphml` files contains a single connected network.
 '''
 import graph_tool as gt
 import graph_tool.topology as topo
@@ -26,15 +26,6 @@ print('Cleaning dataset')
 # If the Scopus ID is empty, we don't actually have any metadata on it;
 # Drop it from the set of all papers
 papers_working = [paper for paper in all_papers if paper['sid'] != '']
-# 
-# # Add an internal ID to each paper
-# counter = -1
-# id_from_sid = {}
-# for paper in papers_working:
-#     counter += 1
-#     paper['id'] = counter
-#     # id_from_sid provides a quick lookup of internal id
-#     id_from_sid[paper['sid']] = paper['id'] 
 
 
 # Step 2:  Build citation network
@@ -126,7 +117,7 @@ if not path.isfile(citenet_outfile_pre + '0' + outfile_suff):
 	core_vertices = [vertex for vertex in list(citenet.vertices()) if core[vertex]]
 	print(str(len(core_vertices)) + ' core set members found')
 	# Extract a list of the component IDs from the core set members
-	core_components = set(component_pmap[vertex] for vertex in core_vertices)
+	core_components = {component_pmap[vertex] for vertex in core_vertices}
 	print(str(len(core_components)) + ' components with core set members')
 	print(core_components)
 
@@ -158,7 +149,6 @@ if not path.isfile(citenet_outfile_pre + '0' + outfile_suff):
 	for component in citenets:
 		outfile = citenet_outfile_pre + str(citenets.index(component)) + outfile_suff
 		component.save(outfile)
-
 
 
 # Step 5:  Build coauthor network
@@ -277,7 +267,6 @@ for component in core_components:
 		print('Edges: '	+ str(temp_graph.num_edges()))
 	else:
 		print(component)
-		
 		
 
 # Step 4:  Save coauthor network to disk

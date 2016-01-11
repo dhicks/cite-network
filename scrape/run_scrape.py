@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 '''
-This module uses the functions in the `batch` and `scrape` modules to 
-build the dataset.
+Starting with the `csv` file for generation 1, retrieve the desired metadata.  
 '''
 
 import batch
 import csv
+
 import os
 import random
 from scrape import *
@@ -97,20 +97,6 @@ if status['1']['finish'] == False:
 		# Clean up the batch output
 		batch.clean_batch()
 		
-		# TODO: this next bit really belongs at the beginning of Step 2a
-		# Extract the sids and references
-		gen_1_sid = [paper['sid'] for paper in gen_1]
-		gen_0_sid = []
-		# TODO: use a list comprehension instead of a loop here
-		for paper in gen_1:
-			# Skip papers with missing reference list
-			if 'references' not in paper:
-				continue
-			gen_0_sid += paper['references']
-		# Remove all of the SIDs that we've already scraped
-		# At the same time, make it a set to remove redundancies
-		gen_0_sid = {sid for sid in gen_0_sid if sid not in gen_1_sid}
-		
 		# Finished with step 1
 		status['1']['finish'] = True
 		with open(status_file, 'w') as writefile:
@@ -121,6 +107,23 @@ if status['1']['finish'] == False:
 # Step 2:  Two generation backwards search
 
 if status['2a']['start'] == False:
+	# Load generation 1
+	with open(gen_1_outfile) as readfile:
+		gen_1 = json.load(readilfe)
+	# Extract the generation 1 SIDs
+	gen_1_sid = [paper['sid'] for paper in gen_1]
+	# Extract the references
+	#  This isn't perspicuous.  
+	#  `for paper in gen_1` gets every paper in generation 1
+	#  `if 'references' in paper` filters out the papers without reference lists
+	#  `for reference in paper['references']` unpacks the list of references
+	#  Extracting as a set removes redundancies automatically
+	gen_0_sid = {reference for paper in gen_1 
+								if 'references' in paper 
+							for reference in paper['references']}
+	# Remove the SIDs that we've already scraped
+	gen_0_sid = {sid for sid in gen_0_sid if sid not in gen_1_sid}
+
 	print(str(len(gen_0_sid)) + ' items in generation 0')
 	
 	if not batch.exists_batch():
@@ -155,26 +158,6 @@ if status['2a']['finish'] == False:
 			json.dump(gen_0, writefile)
 		# Clean up the batch output
 		batch.clean_batch()
-# 		
-#		# TODO: this code was moved to start of 2b; delete it here
-# 		# Extract the SIDs
-# 		gen_0_sid = [paper['sid'] for paper in gen_0]
-# 		# Extract the references
-# 		gen_n1_sid = []
-# 		for paper in gen_0:
-# 			# Skip papers with missing reference lists
-# 			if 'references' not in paper:
-# 				continue
-# 			gen_n1_sid = paper['references']
-# 		# Remove all of the SIDs scraped in generation 0
-# 		gen_n1_sid = {sid for sid in gen_n1_sid if sid not in gen_0_sid}
-# 		
-# 		# Load the generation 1 SIDs
-# 		with open(gen_1_outfile) as readfile:
-# 			gen_1 = json.load(readfile)
-# 		gen_1_sid = [paper['sid'] for paper in gen_1]
-# 		# And remove all of the SIDs scraped in generation 1
-# 		gen_n1_sid = {sid for sid in gen_n1_sid if sid not in gen_1_sid}
 		
 		# Finished with step 2a
 		status['2a']['finish'] = True
@@ -186,24 +169,12 @@ if status['2b']['start'] == False:
 		gen_0 = json.load(readfile)
 	# Extract the SIDs
 	gen_0_sid = [paper['sid'] for paper in gen_0]
-	# Extract the references
-	#  This isn't perspicuous.  
-	#  `for paper in gen_0` gets every paper in generation 0
-	#  `if 'references' in paper` filters out the papers without reference lists
-	#  `for reference in paper['references']` unpacks the list of references
-	#  Extracting as a set removes redundancies automatically
 	gen_n1_sid = {reference for paper in gen_0 
 								if 'references' in paper 
 							for reference in paper['references']}
-	# TODO: this code was replaced with the list comprehension above; delete it
-# 	for paper in gen_0:
-# 		# Skip papers with missing reference lists
-# 		if 'references' not in paper:
-# 			continue
-# 		gen_n1_sid = paper['references']
 	print('Total ' + str(len(gen_n1_sid)) + ' references extracted from generation 0')
 
-	# Remove all of the SIDs scraped in generation 0
+	# Remove the SIDs scraped in generation 0
 	print('Filtering out generation 0 SIDs')
 	gen_n1_sid = {sid for sid in gen_n1_sid if sid not in gen_0_sid}
 	print('Done')
@@ -213,24 +184,29 @@ if status['2b']['start'] == False:
 	with open(gen_1_outfile) as readfile:
 		gen_1 = json.load(readfile)
 	gen_1_sid = [paper['sid'] for paper in gen_1]
-	# And remove all of the SIDs scraped in generation 1
+	# And remove the SIDs scraped in generation 1
 	gen_n1_sid = {sid for sid in gen_n1_sid if sid not in gen_1_sid}
 	print('Done')
 
 	print(str(len(gen_n1_sid)) + ' new items in generation -1')
 	
-	if not batch.exists_batch():
-		print('Setting batch for generation -1')
-		batch_response = batch.set_batch(list(gen_n1_sid))
-	else:
-		raise Exception('Error setting batch')
+	# If there are more than 100,000 new items to retrieve, we'll cut things short here
+	if len(gen_n1_sid) < 100000:
+		if not batch.exists_batch():
+			print('Setting batch for generation -1')
+			batch_response = batch.set_batch(list(gen_n1_sid))
+		else:
+			raise Exception('Error setting batch')
 		
-	if batch_response == True:
-		status['2b']['start'] = True
-		with open(status_file, 'w') as writefile:
-			json.dump(status, writefile)
+		if batch_response == True:
+			status['2b']['start'] = True
+			with open(status_file, 'w') as writefile:
+				json.dump(status, writefile)
+		else:
+			raise Exception('Error setting batch')
 	else:
-		raise Exception('Error setting batch')
+		status['2b']['start'] = True
+		stats['2b']['finish'] = True
 		
 if status['2b']['finish'] == False:
 	# Run the batch

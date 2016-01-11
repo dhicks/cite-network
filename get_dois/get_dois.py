@@ -1,11 +1,8 @@
 # -*- coding: utf-8 -*-
-"""
-Created on Fri Oct 30 14:05:59 2015
+'''
+Starting with a `xml` file exported from EndNote, extract a list of DOIs and a search string that can be copied and pasted directly into Scopus' advanced search box.  
+'''
 
-@author: dhicks1
-"""
-
-#import xml.etree.ElementTree as ET
 import xmltodict
 
 infile = 'CSS_Publications_Library-June 2015.xml'
@@ -46,7 +43,7 @@ with open(outfile, 'w') as writefile:
 
 # Wrap the DOIs in the Scopus DOI search operator
 dois_search = ['DOI(' + doi + ')' for doi in dois]
-# Then write them to a file, conjoined with OR
+# Then write them to a file, conjoined with OR. 
 # We should be able to copy-and-paste the query into Scopus advanced search: 
 # http://www-scopus-com/search/form.url?zone=TopNavBar&origin=searchadvanced
 with open(search_string_outfile, 'w') as writefile:
