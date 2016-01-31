@@ -170,6 +170,48 @@ def summary(data):
 	
 
 
+def insularity(net, community):
+	'''
+	Calculates the insularity of a single community, the fraction of its edges 
+	that are intracommunity. 
+	:param net: The network of interest
+	:param community: A Boolean property map on `net`
+	:return: The insularity statistic
+	'''
+	# Community gets passed as a Boolean property map
+	# Build a list of nodes where community == True
+	community_nodes = set([vertex for vertex in net.vertices() if community[vertex]])
+	# The set of all nodes touching the community
+	community_edges = set([edge for node in community_nodes for edge in node.all_edges()])
+	#print(len(community_edges))
+	# Extract the intracommunity edges
+	intracommunity_edges = [edge for edge in community_edges 
+								if edge.source() in community_nodes and
+									edge.target() in community_nodes]
+	# Return the fraction
+	return(len(intracommunity_edges) / len(community_edges))
+
+
+
+def partition_insularity(net, partition):
+	'''
+	Calculates the insularity for communities defined by the distinct values 
+	of the given property map.
+	:param net: The network of interest
+	:param partition: A discretely-valued property map on `net`
+	:return: Dict with {partition_value: insularity}
+	'''
+	insularities = {}
+	for community in set(partition.get_array()):
+		temp_pmap = net.new_vertex_property('bool',
+						vals = [partition[vertex] == community
+								for vertex in net.vertices()])
+		temp_ins = insularity(net, temp_pmap)
+		insularities[community] = temp_ins
+	return insularities
+
+
+
 def degree_dist(net, core, show_plot = False, save_plot = True, outfile = None):
 	'''
 	Calculate out degree, an empirical CDF, and ranking for each vertex.  
@@ -439,7 +481,7 @@ def plot_sample_dist(samples, observation, stat_label = '$Q$', p_label = None):
 
 
 
-def modularity_sample_dist(net, n_core, obs_mod, 
+def modularity_sample_dist(net, n_core, obs_mod, mod_func = comm.modularity,
 							n_samples = 1000, seed_int = None,
 							show_plot = False, 
 							save_plot = True, outfile = None):
@@ -448,6 +490,7 @@ def modularity_sample_dist(net, n_core, obs_mod,
 	:param net: Network of interest
 	:param n_core: Number of core vertices
 	:param obs_mod: Observed modularity
+	:param mod_func: Function used to calculate modularity
 	:param n_samples = 1000: Number of samples to draw
 	:param seed_int: RNG seed
 	:param show_plot: Show the plot on the screen?
@@ -472,12 +515,12 @@ def modularity_sample_dist(net, n_core, obs_mod,
 			temp_part_pmap[vertex] = True
 		#print('calculating modularity')
 		# Calculate the modularity and save it in `samples`
-		samples += [comm.modularity(net, temp_part_pmap)]
+		samples += [mod_func(net, temp_part_pmap)]
 		if len(samples) % 100 == 0:
 			print(len(samples))
 			
 	# Calculate p-value
-	print('Mean sample modularity: ' + np.mean(samples))
+	print('Mean sample modularity: ' + str(np.mean(samples)))
 	p = p_sample(samples, obs_mod)
 	print('P-value of observed modularity: ' + str(p))
 
@@ -599,13 +642,21 @@ def run_analysis(netfile, compnet_files):
 	# Calculate modularity, using the core vertices as the partition
 	modularity = comm.modularity(net, core_pmap)
 	print('Observed modularity: ' + str(modularity))
-
+	obs_ins = insularity(net, core_pmap)
+	print('Observed insularity: ' + str(obs_ins))
+	
 	# Calculate the number of core vertices
 	n_core = len(core_vertices)
 	# Construct a sampling distribution for the modularity statistic
 	#  And use it to calculate a p-value for the modularity
-	modularity_sample_dist(net, n_core, modularity, 
-								outfile = outfile_pre, 
+	print('Random sample modularity')
+	modularity_sample_dist(net, n_core, modularity,
+								outfile = outfile_pre + '.mod', 
+								show_plot = False, save_plot = True)
+	print('Random sample community insularity')
+	modularity_sample_dist(net, n_core, obs_ins, 
+								mod_func = insularity, 
+								outfile = outfile_pre + '.ins',
 								show_plot = False, save_plot = True)
 	
 	# Information-theoretic partitioning
@@ -617,6 +668,11 @@ def run_analysis(netfile, compnet_files):
 	# Calculate the modularity
 	block_modularity = comm.modularity(net, net.vp['partition'])
 	print('Partion modularity: ' + str(block_modularity))
+	print('Partition community modularities')
+	block_insularities = partition_insularities(net, partition)
+	for community in block_insularities:
+		print('Community ' + str(community) + ': ' + 
+				str(block_insularities[community]))
 	
 	print('Plotting')
 	size_pmap = net.new_vertex_property('float', vals = .1 + .4 * core_pmap.a)
@@ -624,9 +680,9 @@ def run_analysis(netfile, compnet_files):
 						size_pmap = size_pmap, filename_mod = '.partition')
 	
 	# Modularity optimization
-	optimal_sample_dist(net, modularity, #n_samples = 300, 
- 								outfile = outfile_pre, 
-								show_plot = False, save_plot = True)
+# 	optimal_sample_dist(net, modularity, n_samples = 300, 
+#  								outfile = outfile_pre, 
+# 								show_plot = False, save_plot = True)
 
 
 	# Save results
@@ -661,12 +717,16 @@ def run_analysis(netfile, compnet_files):
 		k_compnet = round(n_core / net.num_vertices() * n_compnet)
 		# Sample distribution based on random partition
 		modularity_sample_dist(compnet, k_compnet, modularity, 
-								outfile = outfile_pre + '.' + compnet_outfile, 
-								show_plot = False)
+								outfile = outfile_pre + '.mod.' + compnet_outfile, 
+								show_plot = False, save_plot = True)
+		modularity_sample_dist(compnet, k_compnet, obs_ins, 
+								mod_func = insularity, 
+								outfile = outfile_pre + 'ins.' + compnet_outfile,
+								show_plot = False, save_plot = True)
 		# Sample distribution based on optimizing modularity
-		optimal_sample_dist(compnet, modularity, #n_samples = 300, 
-								outfile = outfile_pre + '.' + compnet_outfile,  
-								show_plot = False)
+# 		optimal_sample_dist(compnet, modularity, n_samples = 300, 
+# 								outfile = outfile_pre + '.mod.' + compnet_outfile,  
+# 								show_plot = False)
 
 
 	# Timestamp
@@ -680,12 +740,14 @@ if __name__ == '__main__':
 	# Networks for analysis
 	#netfiles = ['citenet0']
 	#netfiles = ['autnet0']
-	#netfiles = ['autnet1']
-	netfiles = ['autnet1', 'autnet0', 'citenet0']
+	netfiles = ['autnet1']
+	#netfiles = ['autnet1', 'autnet0', 'citenet0']
 
 	# Comparison networks
 	#compnet_files = ['phnet.graphml']
 	compnet_files = ['phnet.graphml', 'ptnet.graphml']
+
+	random.seed(24680)
 
 	print('-'*40)
 	for netfile in netfiles:
