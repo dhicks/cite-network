@@ -14,8 +14,9 @@ net = read_graph('citenet0.out.graphml', format = 'graphml')
 # Convert it to a data frame for convenience
 net_df = get.data.frame(net, what = 'vertices') %>% data.frame
 net_df$partition = as.factor(net_df$partition)
+net_df = net_df %>% filter(year > 2005)
 
-#core_net = delete_vertices(net, V(net)[core == FALSE])
+core_net = delete_vertices(net, V(net)[core == FALSE])
 
 # ---------- #
 # Eigenvector centrality and out-degree
@@ -26,12 +27,22 @@ years = seq(from = min(net_df$year), to = max(net_df$year), by = 2)
 
 # Out degree vs. year
 out.v.year <- ggplot(data = net_df, aes(x = year, y = out.degree)) + 
-	geom_point(aes(size = core, color = core), alpha = .5, position = 'jitter') +
-	#stat_smooth(method = 'lm') +
-	stat_summary(fun.y = 'median', geom = 'line', color = 'blue') +
+	geom_point(aes(color = core, alpha = core), position = 'jitter') +
+	stat_smooth(method = 'lm') +
+	#stat_summary(fun.y = 'median', geom = 'line', color = 'black') +
 	scale_x_continuous(breaks = years) +
+	scale_color_brewer(palette = 'Set1') +
 	scale_y_log10() + ylab('out degree')
 out.v.year
+
+# To correct for publication year
+# year_model <- lm(data = net_df, out.degree ~ year)
+# year_adj <- predict(year_model, data.frame(year = net_df$year))
+# net_df <- net_df %>% 
+# 	mutate(out.degree.yr.adj = out.degree - year_adj) %>%
+# 	mutate(out.degree.yr.adj.rank = dense_rank(desc(out.degree.yr.adj)))
+# net_df %>% filter(out.degree.yr.adj.rank <= 315 & core) %>% View
+
 # Out degree ranking vs. year
 ggplot(data = net_df, aes(x = year, y = out.degree.rank)) + 
 	geom_point(aes(size = core, color = core), alpha = .5, position = 'jitter') +
@@ -81,13 +92,16 @@ cor(net_df$evc.rank, net_df$out.degree)**2
 # ---------- #
 # Correlation between core and information-theoretic partition
 # Plot
-ggplot(data = net_df) +
+contingency_plot <- ggplot(data = net_df) +
 	geom_point(aes(x = partition, y = core, color = core, alpha = core), 
 			   #alpha = .5,
 			   position = position_jitter(width = .4, height = .4)) +
 	scale_color_brewer(palette = 'Set1', guide = FALSE) +
 	scale_alpha_discrete(guide = FALSE) +
-	xlab('calculated partition')
+	xlab('Information-theoretic partition') +
+	ylab('Core partition')
+contingency_plot
+save_plot('contingency.png', contingency_plot, base_aspect_ratio = 1.5)
 
 ggplot(data = net_df) +
 	geom_point(aes(x = year, y = partition, color = core, alpha = core),
@@ -106,3 +120,8 @@ corepart_chisq = chisq.test(corepart_table, correct = FALSE)
 corepart_chisq
 # Cramer's V
 cramersV(corepart_table, correct = FALSE) ** 2
+
+# For comparison
+matrix(c(150,0,15000,15000), nrow = 2) %>% as.table %>% chisq.test(correct = FALSE)
+	#cramersV(correct = FALSE) %>% . ** 2
+#pwr.chisq.test(w = sqrt(corepart_chisq$statistic), N = sum(corepart_table), df = 1, sig.level = .05)
