@@ -520,13 +520,13 @@ def modularity_sample_dist(net, n_core, obs_mod, mod_func = comm.modularity,
 			print(len(samples))
 			
 	# Calculate p-value
-	print('Mean sample modularity: ' + str(np.mean(samples)))
+	print('Mean sample value: ' + str(np.mean(samples)))
 	p = p_sample(samples, obs_mod)
-	print('P-value of observed modularity: ' + str(p))
+	print('P-value of observed value: ' + str(p))
 
 	# Fold of observation relative to sampling distribution mean
 	fold = obs_mod / np.mean(samples)
-	print('Fold of observed modularity: ' + str(fold))
+	print('Fold of observed value: ' + str(fold))
 
 	# Plot the sample distribution
 	sample_plot = plot_sample_dist(samples, obs_mod, p_label = p)
@@ -534,8 +534,11 @@ def modularity_sample_dist(net, n_core, obs_mod, mod_func = comm.modularity,
 	if show_plot:
 		print(sample_plot)
 	if outfile is not None and save_plot:
-		ggsave(filename = outfile + '.mod_sample' + '.pdf', 
-				plot = sample_plot)
+		if max(samples) == min(samples):
+			pass
+		else:
+			ggsave(filename = outfile + '.mod_sample' + '.pdf', 
+					plot = sample_plot)
 
 	return(p, fold)
 
@@ -577,6 +580,7 @@ def optimal_sample_dist(net, obs_mod,
 	print('Mean sample modularity: ' + str(sample_mean))
 	p = p_sample(samples, obs_mod)
 	print('P-value of modularity: ' + str(p))
+	# TODO: insularities
 
 	# Fold of observation relative to sampling distribution mean
 	fold = obs_mod / sample_mean
@@ -653,7 +657,7 @@ def run_analysis(netfile, compnet_files):
 	modularity_sample_dist(net, n_core, modularity,
 								outfile = outfile_pre + '.mod', 
 								show_plot = False, save_plot = True)
-	print('Random sample community insularity')
+	print('Random sample insularities')
 	modularity_sample_dist(net, n_core, obs_ins, 
 								mod_func = insularity, 
 								outfile = outfile_pre + '.ins',
@@ -662,14 +666,15 @@ def run_analysis(netfile, compnet_files):
 	# Information-theoretic partitioning
 	print('Information-theoretic partitioning')
 	# Calculate the partition
-	part_block = comm.minimize_blockmodel_dl(net, min_B = 2, max_B = 2)
+	part_block = comm.minimize_blockmodel_dl(net, min_B = 2, max_B = 2, 
+												parallel = True)
 	# Extract the block memberships as a pmap
 	net.vp['partition'] = part_block.get_blocks()
 	# Calculate the modularity
 	block_modularity = comm.modularity(net, net.vp['partition'])
 	print('Partion modularity: ' + str(block_modularity))
-	print('Partition community modularities')
-	block_insularities = partition_insularities(net, partition)
+	print('Partition insularities')
+	block_insularities = partition_insularity(net, net.vp['partition'])
 	for community in block_insularities:
 		print('Community ' + str(community) + ': ' + 
 				str(block_insularities[community]))
@@ -680,9 +685,9 @@ def run_analysis(netfile, compnet_files):
 						size_pmap = size_pmap, filename_mod = '.partition')
 	
 	# Modularity optimization
-# 	optimal_sample_dist(net, modularity, n_samples = 300, 
-#  								outfile = outfile_pre, 
-# 								show_plot = False, save_plot = True)
+	optimal_sample_dist(net, modularity, 
+ 								outfile = outfile_pre, 
+								show_plot = False, save_plot = True)
 
 
 	# Save results
@@ -691,17 +696,16 @@ def run_analysis(netfile, compnet_files):
 	#  so we'll go ahead and save things now.  
 	print('Saving')
 	# Save in graph-tool's binary format
-	net.save(netfile + '.out' + '.gt')
+	net.save(outfile_pre + '.out' + '.gt')
 	# Replace vector-type properties with strings
-	net.list_properties()
+	#net.list_properties()
 	properties = net.vertex_properties
 	for property_key in properties.keys():
 		property = properties[property_key]
 		if 'vector' in property.value_type():
-			properties[property_key] = \
-				property.copy(value_type = 'string')
+			properties[property_key] = property.copy(value_type = 'string')
 	# Save as graphml
-	net.save(netfile + '.out' + '.graphml')
+	net.save(outfile_pre + '.out' + '.graphml')
 
 
 	# Comparison networks
@@ -716,12 +720,16 @@ def run_analysis(netfile, compnet_files):
 		# Num vertices in compnet to use in each random partition
 		k_compnet = round(n_core / net.num_vertices() * n_compnet)
 		# Sample distribution based on random partition
+		print('Random sample modularities')
+		print('Observed modularity: ' + str(modularity))
 		modularity_sample_dist(compnet, k_compnet, modularity, 
 								outfile = outfile_pre + '.mod.' + compnet_outfile, 
 								show_plot = False, save_plot = True)
+		print('Random sample insularities')
+		print('Observed insularity: ' + str(obs_ins))
 		modularity_sample_dist(compnet, k_compnet, obs_ins, 
 								mod_func = insularity, 
-								outfile = outfile_pre + 'ins.' + compnet_outfile,
+								outfile = outfile_pre + '.ins.' + compnet_outfile,
 								show_plot = False, save_plot = True)
 		# Sample distribution based on optimizing modularity
 # 		optimal_sample_dist(compnet, modularity, n_samples = 300, 
