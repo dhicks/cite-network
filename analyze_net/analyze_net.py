@@ -738,19 +738,20 @@ def run_analysis(netfile, compnet_files):
 	
 if __name__ == '__main__':
 	# Networks for analysis
-	#netfiles = ['citenet0']
+	netfiles = ['citenet0']
 	#netfiles = ['autnet0']
-	netfiles = ['autnet1']
+	#netfiles = ['autnet1']
 	#netfiles = ['autnet1', 'autnet0', 'citenet0']
 
 	# Comparison networks
 	#compnet_files = ['phnet.graphml']
 	compnet_files = ['phnet.graphml', 'ptnet.graphml']
 
-	random.seed(24680)
-
 	print('-'*40)
 	for netfile in netfiles:
+		seed(24680)
+		gt.seed_rng(24680)
+
 		#logfile = netfile + '.log'
 		#with open(logfile, 'w') as log:
 		# TODO: print ~> logging to logfile
