@@ -11,13 +11,14 @@ from collections import OrderedDict
 import requests
 import json
 #from math import ceil
+import pandas as pd
 import time
 import xmltodict
 
 from api_key import MY_API_KEY
 
 class ParseError(Exception):
-	pass
+    pass
 
 def _parse_scopus_metadata(response_raw):
     '''
@@ -43,46 +44,59 @@ def _parse_scopus_metadata(response_raw):
         #  return an empty set of metadata
         if response['service-error']['status']['statusCode'] == 'RESOURCE_NOT_FOUND':
             print('\t\tResource not found error')
+            return {'doi': '', 'sid': ''}
         # If something else is going on, raise an exception
         else:
             print(response)
             raise ParseError('Service error in query response')
+    
     if 'abstracts-retrieval-multidoc-response' in response:
-    	'''
-    	This seems to be the top-level field if Scopus finds multiple documents 
-    	with the same DOI.  Based on this result:  
-    		http://api.elsevier.com/content/abstract/doi/10.1007/s00204-014-1298-3?apiKey=1f271dd2cf40387ab1d7e4645d36f599
-    	it looks like this happens when an Online First version isn't correctly
-    	updated, and instead a new item is added to the database.  
-    	The second entry (index 1) seems to be the later one, so we grab it.  
-    	'''
-    	response = {'abstracts-retrieval-response': 
-    					response['abstracts-retrieval-multidoc-response']['abstracts-retrieval-response'][1]}
+        '''
+        This seems to be the top-level field if Scopus finds multiple documents 
+        with the same DOI.  Based on this result:  
+            http://api.elsevier.com/content/abstract/doi/10.1007/s00204-014-1298-3?apiKey=1f271dd2cf40387ab1d7e4645d36f599
+        it looks like this happens when an Online First version isn't correctly
+        updated, and instead a new item is added to the database.  
+        Loop through them, taking the first one with bibliography entries.  
+        '''
+        for record in response['abstracts-retrieval-multidoc-response']['abstracts-retrieval-response']:
+            try:
+                if 'reference' in record['item']['bibrecord']['tail']['bibliography']:
+                    response = record
+                    break
+            except (TypeError, KeyError):
+                pass
+        # If we don't find any version with a bibliography, 
+        #  just go with the first one
+        else:
+            response = response['abstracts-retrieval-multidoc-response']['abstracts-retrieval-response'][0]        
+    else:
+        response = response['abstracts-retrieval-response']
     # The locations of these metadata are given in the Scopus XML documentation
     # http://ebrp.elsevier.com/pdf/Scopus_Custom_Data_Documentation_v4.pdf
     # If a field is missing, the dict raises a KeyError or TypeError 
     #  (`'NoneType' object is not subscriptable`), and so we use an empty string 
     #  instead
     try:
-        doi = response['abstracts-retrieval-response']['coredata']['prism:doi']
+        doi = response['coredata']['prism:doi']
     except KeyError:
         doi = ''
     #print doi
     try:
         # The content for `dc:identifier` looks something like 'Scopus:115628'        
-        sid = response['abstracts-retrieval-response']['coredata']['dc:identifier']
+        sid = response['coredata']['dc:identifier']
         sid = sid.split(':')[1]
         #print sid
     except KeyError:
         sid = ''
     #print sid
     try:
-        pmid = response['abstracts-retrieval-response']['coredata']['pubmed-id']
+        pmid = response['coredata']['pubmed-id']
     except KeyError:
         pmid = ''
     try:
         authors = []
-        authors_resp = response['abstracts-retrieval-response']['authors']['author']
+        authors_resp = response['authors']['author']
         # If there's only one <author>, xmltodict parses the contents to an OrderedDict
         if type(authors_resp) is OrderedDict:
             authors += [authors_resp['@auid']]
@@ -99,21 +113,21 @@ def _parse_scopus_metadata(response_raw):
         #raise ValueError('Problem parsing authors for doi ' + doi)
     #print authors
     try:
-        if 'prism:isbn' in response['abstracts-retrieval-response']['coredata']:
-            source = response['abstracts-retrieval-response']['coredata']['prism:isbn']
+        if 'prism:isbn' in response['coredata']:
+            source = response['coredata']['prism:isbn']
         else:
-            source = response['abstracts-retrieval-response']['coredata']['prism:issn']
+            source = response['coredata']['prism:issn']
     except KeyError:
         source = ''
     #print source
     try:
-    	year = response['abstracts-retrieval-response']['item']['bibrecord']['head']['source']['publicationyear']['@first']
-    	year = int(year)
-    	#print(year)
+        year = response['item']['bibrecord']['head']['source']['publicationyear']['@first']
+        year = int(year)
+        #print(year)
     except KeyError:
-    	year = None
+        year = None
     try:
-        refs_response = response['abstracts-retrieval-response']['item']['bibrecord']['tail']['bibliography']['reference']
+        refs_response = response['item']['bibrecord']['tail']['bibliography']['reference']
         refs = []
         for ref in refs_response:
             refs += [ref['ref-info']['refd-itemidlist']['itemid']['#text']]
@@ -168,6 +182,9 @@ def get_meta_by_doi(doi, save_raw = False):
     '''
     #print 'getting metadata for DOI ' + doi
     # Build the http query, and send it using `_get_query`
+    # If DOI is missing (Pandas NaN), then just return empty metadata
+    if pd.isnull(doi):
+        return {'doi': '', 'sid': ''}
     base_query = 'http://api.elsevier.com/content/abstract/doi/'
     query = base_query + doi + '?' + 'apiKey=' + MY_API_KEY
     print('\t' + query)

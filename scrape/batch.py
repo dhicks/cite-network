@@ -127,7 +127,8 @@ def run_batch(retrieve):
 			if (('references' not in new_data) or 
 					(new_data['references'] == '') or 
 					(new_data['references'] == [])):
-				input('Empty reference list. Do anything except Ctrl-C to continue.')	
+				#input('Empty reference list. Do anything except Ctrl-C to continue.')	
+				print('\t\t', 'Empty reference list')
 			# Add it to our temporary container
 			temp_data += [new_data]
 			# Note that we retrieved it successfully

@@ -8,13 +8,14 @@ import csv
 
 import os
 import random
+import pandas as pd
 from scrape import *
 import sys
 import time
 
 # File with the list of generation 1 DOIs
-infile = 'gen_1 2015-10-30.csv'
-#infile = 'test_dois.csv'
+#infile = 'gen 01 2016-03-30.csv'
+infile = 'gen 01 2016-03-30.xlsx'
 
 # Files to save the scraped data
 gen_1_outfile = 'gen_1.json'
@@ -51,18 +52,8 @@ else:
 
 if status['1']['start'] == False:
 	# Get the DOIs manually retrieved from Scopus
-	gen_1_doi = []
-	with open(infile) as readfile:
-		csvreader = csv.reader(readfile)
-		# Skip the header row
-		next(csvreader)
-		for row in csvreader:
-			this_doi = row[0]
-			gen_1_doi += [this_doi]
-			# The next two lines limit how many DOIs we read, for debugging
-	#        if len(gen_1_doi) >= 1:
-	#            break
-
+	gen_1_doi = pd.read_excel(infile)['DOI'].tolist()
+	#print(gen_1_doi)
 	print(str(len(gen_1_doi)) + ' items in generation +1')
 
 	if not batch.exists_batch():
@@ -109,7 +100,7 @@ if status['1']['finish'] == False:
 if status['2a']['start'] == False:
 	# Load generation 1
 	with open(gen_1_outfile) as readfile:
-		gen_1 = json.load(readilfe)
+		gen_1 = json.load(readfile)
 	# Extract the generation 1 SIDs
 	gen_1_sid = [paper['sid'] for paper in gen_1]
 	# Extract the references
@@ -263,8 +254,7 @@ if status['3']['start'] == False:
 	with open(combined_outfile) as readfile:
 		all_papers = json.load(readfile)
 	with open(css_dois_file) as readfile:
-		readdata = readfile.read()
-	core_doi = readdata.split(', ')
+		core_doi = json.load(readfile)
 
 	for paper in all_papers:
 		paper['core'] = (paper['doi'] in core_doi)
