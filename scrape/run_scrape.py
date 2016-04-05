@@ -15,7 +15,8 @@ import time
 
 # File with the list of generation 1 DOIs
 #infile = 'gen 01 2016-03-30.csv'
-infile = 'gen 01 2016-03-30.xlsx'
+infile1 = 'gen 01 2016-03-30.xlsx'
+infile2 = 'gen 01 2016-04-04.xlsx'
 
 # Files to save the scraped data
 gen_1_outfile = 'gen_1.json'
@@ -52,7 +53,9 @@ else:
 
 if status['1']['start'] == False:
 	# Get the DOIs manually retrieved from Scopus
-	gen_1_doi = pd.read_excel(infile)['DOI'].tolist()
+	dois1 = pd.read_excel(infile1)['DOI'].tolist()
+	dois2 = pd.read_excel(infile2)['DOI'].tolist()
+	gen_1_doi = list(set(dois1 + dois2))
 	#print(gen_1_doi)
 	print(str(len(gen_1_doi)) + ' items in generation +1')
 
