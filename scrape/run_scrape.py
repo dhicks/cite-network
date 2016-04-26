@@ -25,7 +25,7 @@ gen_n1_outfile = 'gen_n1.json'
 combined_outfile = 'papers.json'
 
 # File with the DOIs for the core set
-css_dois_file = 'css_dois.txt'
+css_dois_file = 'css_dois.json'
 
 print('Run started at ' + time.strftime('%c', time.localtime()))
 
@@ -162,7 +162,7 @@ if status['2b']['start'] == False:
 	with open(gen_0_outfile) as readfile:
 		gen_0 = json.load(readfile)
 	# Extract the SIDs
-	gen_0_sid = [paper['sid'] for paper in gen_0]
+	gen_0_sid = {paper['sid'] for paper in gen_0}
 	gen_n1_sid = {reference for paper in gen_0 
 								if 'references' in paper 
 							for reference in paper['references']}
@@ -177,7 +177,7 @@ if status['2b']['start'] == False:
 	print('Filtering out generation 1 SIDs')
 	with open(gen_1_outfile) as readfile:
 		gen_1 = json.load(readfile)
-	gen_1_sid = [paper['sid'] for paper in gen_1]
+	gen_1_sid = {paper['sid'] for paper in gen_1}
 	# And remove the SIDs scraped in generation 1
 	gen_n1_sid = {sid for sid in gen_n1_sid if sid not in gen_1_sid}
 	print('Done')
@@ -200,7 +200,19 @@ if status['2b']['start'] == False:
 			raise Exception('Error setting batch')
 	else:
 		status['2b']['start'] = True
-		stats['2b']['finish'] = True
+		# Combine both generations
+		all_papers = gen_1 + gen_0
+		# And write them to a permanent file
+		with open(combined_outfile, 'w') as writefile:
+			json.dump(all_papers, writefile)
+
+		print()
+		print('Totals:')
+		print('Generation +1: ' + str(len(gen_1)))
+		print('Generation 0: ' + str(len(gen_0)))
+		print('All papers: ' + str(len(all_papers)))
+		print()
+		status['2b']['finish'] = True
 		
 if status['2b']['finish'] == False:
 	# Run the batch

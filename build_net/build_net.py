@@ -262,7 +262,6 @@ for component in core_components:
 	if temp_graph.num_vertices() > 0:
 		autnets += [temp_graph]
 		print('Component #' + str(component))
-		print(autnets.index(component))
 		print('Vertices: ' + str(temp_graph.num_vertices()))
 		print('Edges: '	+ str(temp_graph.num_edges()))
 	else:
