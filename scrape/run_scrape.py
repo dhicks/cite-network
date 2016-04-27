@@ -8,13 +8,15 @@ import csv
 
 import os
 import random
+import pandas as pd
 from scrape import *
 import sys
 import time
 
 # File with the list of generation 1 DOIs
-infile = 'gen_1 2015-10-30.csv'
-#infile = 'test_dois.csv'
+#infile = 'gen 01 2016-03-30.csv'
+infile1 = 'gen 01 2016-03-30.xlsx'
+infile2 = 'gen 01 2016-04-04.xlsx'
 
 # Files to save the scraped data
 gen_1_outfile = 'gen_1.json'
@@ -23,7 +25,7 @@ gen_n1_outfile = 'gen_n1.json'
 combined_outfile = 'papers.json'
 
 # File with the DOIs for the core set
-css_dois_file = 'css_dois.txt'
+css_dois_file = 'css_dois.json'
 
 print('Run started at ' + time.strftime('%c', time.localtime()))
 
@@ -51,18 +53,10 @@ else:
 
 if status['1']['start'] == False:
 	# Get the DOIs manually retrieved from Scopus
-	gen_1_doi = []
-	with open(infile) as readfile:
-		csvreader = csv.reader(readfile)
-		# Skip the header row
-		next(csvreader)
-		for row in csvreader:
-			this_doi = row[0]
-			gen_1_doi += [this_doi]
-			# The next two lines limit how many DOIs we read, for debugging
-	#        if len(gen_1_doi) >= 1:
-	#            break
-
+	dois1 = pd.read_excel(infile1)['DOI'].tolist()
+	dois2 = pd.read_excel(infile2)['DOI'].tolist()
+	gen_1_doi = list(set(dois1 + dois2))
+	#print(gen_1_doi)
 	print(str(len(gen_1_doi)) + ' items in generation +1')
 
 	if not batch.exists_batch():
@@ -109,7 +103,7 @@ if status['1']['finish'] == False:
 if status['2a']['start'] == False:
 	# Load generation 1
 	with open(gen_1_outfile) as readfile:
-		gen_1 = json.load(readilfe)
+		gen_1 = json.load(readfile)
 	# Extract the generation 1 SIDs
 	gen_1_sid = [paper['sid'] for paper in gen_1]
 	# Extract the references
@@ -168,7 +162,7 @@ if status['2b']['start'] == False:
 	with open(gen_0_outfile) as readfile:
 		gen_0 = json.load(readfile)
 	# Extract the SIDs
-	gen_0_sid = [paper['sid'] for paper in gen_0]
+	gen_0_sid = {paper['sid'] for paper in gen_0}
 	gen_n1_sid = {reference for paper in gen_0 
 								if 'references' in paper 
 							for reference in paper['references']}
@@ -183,7 +177,7 @@ if status['2b']['start'] == False:
 	print('Filtering out generation 1 SIDs')
 	with open(gen_1_outfile) as readfile:
 		gen_1 = json.load(readfile)
-	gen_1_sid = [paper['sid'] for paper in gen_1]
+	gen_1_sid = {paper['sid'] for paper in gen_1}
 	# And remove the SIDs scraped in generation 1
 	gen_n1_sid = {sid for sid in gen_n1_sid if sid not in gen_1_sid}
 	print('Done')
@@ -206,7 +200,19 @@ if status['2b']['start'] == False:
 			raise Exception('Error setting batch')
 	else:
 		status['2b']['start'] = True
-		stats['2b']['finish'] = True
+		# Combine both generations
+		all_papers = gen_1 + gen_0
+		# And write them to a permanent file
+		with open(combined_outfile, 'w') as writefile:
+			json.dump(all_papers, writefile)
+
+		print()
+		print('Totals:')
+		print('Generation +1: ' + str(len(gen_1)))
+		print('Generation 0: ' + str(len(gen_0)))
+		print('All papers: ' + str(len(all_papers)))
+		print()
+		status['2b']['finish'] = True
 		
 if status['2b']['finish'] == False:
 	# Run the batch
@@ -263,8 +269,7 @@ if status['3']['start'] == False:
 	with open(combined_outfile) as readfile:
 		all_papers = json.load(readfile)
 	with open(css_dois_file) as readfile:
-		readdata = readfile.read()
-	core_doi = readdata.split(', ')
+		core_doi = json.load(readfile)
 
 	for paper in all_papers:
 		paper['core'] = (paper['doi'] in core_doi)
