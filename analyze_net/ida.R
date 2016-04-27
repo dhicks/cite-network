@@ -5,12 +5,12 @@ require(igraph)
 require(ggplot2)
 	require(cowplot)
 require(lsr)
-#require(pwr)
+require(pwr)
 require(xtable)
 
 # ---------- #
 # Load the citation network
-net = read_graph('citenet0.out.graphml', format = 'graphml')
+net = read_graph('output/citenet0.out.graphml', format = 'graphml')
 # Convert it to a data frame for convenience
 net_df = get.data.frame(net, what = 'vertices') %>% data.frame
 net_df$partition = as.factor(net_df$partition)
@@ -93,9 +93,9 @@ cor(net_df$evc.rank, net_df$out.degree)**2
 # Correlation between core and information-theoretic partition
 # Plot
 contingency_plot <- ggplot(data = net_df) +
-	geom_point(aes(x = partition, y = core, color = core, alpha = core), 
+	geom_point(aes(x = partition, y = core, color = partition, alpha = core), 
 			   #alpha = .5,
-			   position = position_jitter(width = .4, height = .4)) +
+			   position = position_jitter()) +
 	scale_color_brewer(palette = 'Set1', guide = FALSE) +
 	scale_alpha_discrete(guide = FALSE) +
 	xlab('Information-theoretic partition') +
@@ -119,9 +119,21 @@ corepart_table[,1] / corepart_table[,2]
 corepart_chisq = chisq.test(corepart_table, correct = FALSE)
 corepart_chisq
 # Cramer's V
-cramersV(corepart_table, correct = FALSE) ** 2
+cramersV(corepart_table, correct = FALSE)
+# Attained power of the test
+#  w = effect size = Cramér's V
+pwr.chisq.test(w = cramersV(corepart_table, correct = FALSE), 
+			   N = sum(corepart_table), 
+			   df = 1, sig.level = .05)
+# Effect size to achieve 99% power
+pwr.chisq.test(N = sum(corepart_table), 
+			   df = 1, sig.level = .05, 
+			   power = .99)$w
+
 
 # For comparison
-matrix(c(150,0,15000,15000), nrow = 2) %>% as.table %>% chisq.test(correct = FALSE)
-	#cramersV(correct = FALSE) %>% . ** 2
-#pwr.chisq.test(w = sqrt(corepart_chisq$statistic), N = sum(corepart_table), df = 1, sig.level = .05)
+# matrix(c(340,0,46000,33000), nrow = 2) %>% as.table %>% #chisq.test(correct = FALSE)
+# 	cramersV(correct = FALSE) %>% . ** 2
+#ES.w2(thing/sum(thing))	
+
+
