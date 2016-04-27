@@ -568,7 +568,7 @@ def optimal_sample_dist(net, obs_mod,
     :param outfile: Filename to save the plot
     :return: p-value, fold induction of observation against sample
     '''    
-# Initialize a container for samples
+	# Initialize a container for samples
     samples = []
     # Set a seed
     if seed_int is not None:
@@ -689,14 +689,13 @@ def run_analysis(netfile, compnet_files):
                 str(block_insularities[community]))
     
     print('Plotting')
-    #size_pmap = net.new_vertex_property('float', vals = 5 + 5 * core_pmap.a)
     size_pmap = gt.prop_to_size(core_pmap, mi = 10, ma = 20)
     layout_and_plot(net, net.vp['partition'], outfile_pre,
                         size_pmap = size_pmap, filename_mod = '.partition')
     
     # Modularity optimization
-    optimal_sample_dist(net, block_modularity, 
-                                 outfile = outfile_pre, 
+    optimal_sample_dist(net, modularity, 
+                                outfile = outfile_pre, 
                                 show_plot = False, save_plot = True)
 
 
