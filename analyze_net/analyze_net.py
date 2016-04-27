@@ -579,16 +579,16 @@ def optimal_sample_dist(net, obs_mod, obs_ins,
     # Set a seed
     if seed_int is not None:
         seed(seed_int)
-    print('Generating ' + str(n_samples) + ' optimal partitions')
+    print('Generating ' + str(n_samples) + ' maximum-modularity partitions')
     while len(samples_mod) < n_samples:
         # Generate an optimal partition
-        temp_part_pmap = gt.community_structure(net, n_iter = 100, n_spins = 2)
+        temp_part_pmap = gt.community_structure(net, n_iter = 50, n_spins = 2)
         # Calculate the modularity and save it in `samples_mod`
         samples_mod += [gt.modularity(net, temp_part_pmap)]
         # Likewise with insularities
         samples_ins += [insularity(net, temp_part_pmap)]
-        if len(samples_mod) % 100 == 0:
-            print(len(samples))
+        if len(samples_mod) % 25 == 0:
+            print(len(samples_mod))
             
     # Calculate p-value for modularity
     sample_mean = np.mean(samples_mod)
@@ -643,7 +643,7 @@ def run_analysis(netfile, compnet_files):
     output_folder = 'output/'
     outfile_pre = output_folder + outfile_pre
      
-     # Plotting
+    # Plotting
     print('Plotting')
     layout = layout_and_plot(net, core_pmap, outfile_pre)
     # Store the layout in the net
@@ -709,7 +709,7 @@ def run_analysis(netfile, compnet_files):
     optimal_sample_dist(net, modularity, obs_ins,
                                 outfile = outfile_pre, 
                                 show_plot = False, save_plot = True)
-
+    
 
     # Save results
     # --------------------
