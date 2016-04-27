@@ -13,7 +13,7 @@ from January 1993 to April 2003.  They can be found at
 import graph_tool.all as gt
 
 # Color schemes used in plotting nets
-from matplotlib.cm import PiYG, PiYG_r
+from matplotlib.cm import bwr, bwr_r
 
 # Python port of ggplot
 #  Very incomplete and buggy! 
@@ -130,9 +130,9 @@ def layout_and_plot(net, color_pmap, outfile_pre, filename_mod = '.net',
         #net.vp['layout'] = gt.radial_tree_layout(net, 0, r=2)
     # Set the colormap
     if not reverse_colors:
-        colormap = PiYG
+        colormap = bwr
     else:
-        colormap = PiYG_r
+        colormap = bwr_r
     # Plot the graph
     gt.graph_draw(net, vertex_fill_color = color_pmap, 
                                 vcmap = colormap,
