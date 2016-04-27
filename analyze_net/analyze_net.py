@@ -27,6 +27,7 @@ from datetime import date, datetime
 import logging
 from matplotlib import pyplot as plt
 import numpy as np
+import os.path as path
 import pandas as pd
 from random import sample, seed
 import scipy.stats as spstats
@@ -51,6 +52,10 @@ def load_net(infile, core = False, filter = False):
     #  `'.'.join` recombines everything with periods
     outfile_pre = '.'.join(infile.split('.')[:-1])
     
+    if path.exists('output/' + outfile_pre + '.out.gt'):
+    	print('Found pre-procesed graph')
+    	infile = 'output/' + outfile_pre + '.out.gt'
+    
     print('Loading ' + infile)
     net = gt.load_graph(infile)
     
@@ -62,9 +67,9 @@ def load_net(infile, core = False, filter = False):
     # Print basic network statistics
     print('Loaded ' + infile)
     print('Vertices: ' + str(net.num_vertices()))
+    print('Edges: ' + str(net.num_edges()))
     if core:
         print('Core vertices: ' + str(len(core_vertices)))
-    print('Edges: ' + str(net.num_edges()))
     
     if core and filter:
         # Add a filter
