@@ -556,7 +556,7 @@ def modularity_sample_dist(net, n_core, obs_mod, mod_func = gt.modularity,
 
 
 
-def optimal_sample_dist(net, obs_mod, 
+def optimal_sample_dist(net, obs_mod, obs_ins, 
                             n_samples = 500, seed_int = None,
                             show_plot = False, 
                             save_plot = True, outfile = None):
@@ -566,6 +566,7 @@ def optimal_sample_dist(net, obs_mod,
     :param net: Network of interest
     :param n_core: Number of core vertices
     :param obs_mod: Observed modularity
+    :param obs_ins: Observed insularity
     :param n_samples = 1000: Number of samples to draw
     :param seed_int: RNG seed
     :param show_plot: Show the plot on the screen?
@@ -582,17 +583,23 @@ def optimal_sample_dist(net, obs_mod,
     while len(samples) < n_samples:
         # Generate an optimal partition
         temp_part_pmap = gt.community_structure(net, n_iter = 100, n_spins = 2)
-        # Calculate the modularity and save it in `samples`
-        samples += [gt.modularity(net, temp_part_pmap)]
-        if len(samples) % 100 == 0:
+        # Calculate the modularity and save it in `samples_mod`
+        samples_mod += [gt.modularity(net, temp_part_pmap)]
+        # Likewise with insularities
+        samples_ins += [insularity(net, temp_part_pmap)]
+        if len(samples_mod) % 100 == 0:
             print(len(samples))
             
     # Calculate p-value
-    sample_mean = np.mean(samples)
+    sample_mean = np.mean(samples_mod)
     print('Mean sample modularity: ' + str(sample_mean))
-    p = p_sample(samples, obs_mod)
+    p = p_sample(samples_mod, obs_mod)
     print('P-value of modularity: ' + str(p))
     # TODO: insularities
+    sample_mean = np.mean(samples_ins)
+    print('Mean sample insularity: ' + str(sample_mean))
+    p = p_sample(samples_ins, obs_ins)
+    print('P-value of insularity: ' + str(p))
 
     # Fold of observation relative to sampling distribution mean
     fold = obs_mod / sample_mean
@@ -699,7 +706,7 @@ def run_analysis(netfile, compnet_files):
                         size_pmap = size_pmap, filename_mod = '.partition')
     
     # Modularity optimization
-    optimal_sample_dist(net, modularity, 
+    optimal_sample_dist(net, modularity, obs_ins,
                                 outfile = outfile_pre, 
                                 show_plot = False, save_plot = True)
 
