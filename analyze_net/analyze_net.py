@@ -10,6 +10,7 @@ from January 1993 to April 2003.  They can be found at
 '''
 
 # Graph-tool modules
+# TODO: import graph_tool.all as gt
 import graph_tool as gt
 import graph_tool.centrality as gtcentral
 import graph_tool.community as comm
@@ -18,7 +19,7 @@ import graph_tool.stats as gtstats
 import graph_tool.topology as gttopo
 
 # Color schemes used in plotting nets
-from matplotlib.cm import OrRd_r, OrRd
+from matplotlib.cm import PiYG, PiYG_r
 
 # Python port of ggplot
 #  Very incomplete and buggy! 
@@ -110,7 +111,7 @@ def load_net(infile, core = False, filter = False):
 
 
 def layout_and_plot(net, color_pmap, outfile_pre, filename_mod = '.net',
-                    size_pmap = None):
+                    size_pmap = None, reverse_colors = False):
     '''
     Plot the net, using a predefined layout if it's included as a vector property.
     :param net: The network to plot.
@@ -121,22 +122,28 @@ def layout_and_plot(net, color_pmap, outfile_pre, filename_mod = '.net',
     '''
     # Define a default size
     if size_pmap is None:
-        size_pmap = net.new_vertex_property('float', val = .05)
-    # If a layout is already defined, use it
-    if 'layout' in net.vp:
-        gtdraw.graph_draw(net, vcolor = color_pmap, vcmap = OrRd_r,
-                                vsize = size_pmap,
-                                penwidth = .75,
-                                pos = net.vp['layout'], pin = True,
-                                output = outfile_pre + filename_mod + '.png')
-        return net.vp['layout']
-    # Otherwise graphviz_draw calculates and returns one
+        size_pmap = net.new_vertex_property('float', val = 20)
+    # If a layout isn't included, calculate it
+    if 'layout' not in net.vp:
+        print('Calculating graph layout')
+        #net.vp['layout'] = gtdraw.fruchterman_reingold_layout(net)
+        net.vp['layout'] = gtdraw.sfdp_layout(net, verbose = True)
+        #net.vp['layout'] = gtdraw.radial_tree_layout(net, 0, r=2)
+    # Set the colormap
+    if not reverse_colors:
+        colormap = PiYG
     else:
-        layout = gtdraw.graph_draw(net, vcolor = color_pmap, vcmap = OrRd_r,
-                                    vsize = size_pmap,
-                                    penwidth = .75,
-                                    output = outfile_pre + filename_mod + '.png')
-        return layout
+        colormap = PiYG_r
+    # Plot the graph
+    gtdraw.graph_draw(net, vertex_fill_color = color_pmap, 
+                                vcmap = colormap,
+                                vertex_size = size_pmap,
+                                edge_pen_width = 1,
+                                pos = net.vp['layout'], #pin = True,
+                                fit_view = 1,
+                                output_size = (2000, 2000),
+                                output = outfile_pre + filename_mod + '.png')
+    return net.vp['layout']
 
 
 
@@ -636,7 +643,7 @@ def run_analysis(netfile, compnet_files):
     net.vp['layout'] = layout
     # Show only the core vertices    
     net.set_vertex_filter(core_pmap)
-    layout_and_plot(net, core_pmap, outfile_pre, filename_mod = '.core.net')
+    layout_and_plot(net, core_pmap, outfile_pre, filename_mod = '.core.net', reverse_colors = True)
     net.set_vertex_filter(None)
     
     # Vertex statistics
@@ -655,7 +662,7 @@ def run_analysis(netfile, compnet_files):
     print('Observed modularity: ' + str(modularity))
     obs_ins = insularity(net, core_pmap)
     print('Observed insularity: ' + str(obs_ins))
-    
+   
     # Calculate the number of core vertices
     n_core = len(core_vertices)
     # Construct a sampling distribution for the modularity statistic
@@ -687,12 +694,13 @@ def run_analysis(netfile, compnet_files):
                 str(block_insularities[community]))
     
     print('Plotting')
-    size_pmap = net.new_vertex_property('float', vals = .1 + .2 * core_pmap.a)
+    #size_pmap = net.new_vertex_property('float', vals = 5 + 5 * core_pmap.a)
+    size_pmap = gtdraw.prop_to_size(core_pmap, mi = 10, ma = 20)
     layout_and_plot(net, net.vp['partition'], outfile_pre,
                         size_pmap = size_pmap, filename_mod = '.partition')
     
     # Modularity optimization
-    optimal_sample_dist(net, modularity, 
+    optimal_sample_dist(net, block_modularity, 
                                  outfile = outfile_pre, 
                                 show_plot = False, save_plot = True)
 
@@ -753,9 +761,9 @@ def run_analysis(netfile, compnet_files):
     
 if __name__ == '__main__':
     # Networks for analysis
-    #netfiles = ['citenet0']
+    netfiles = ['citenet0']
     #netfiles = ['autnet0']
-    netfiles = ['autnet1']
+    #netfiles = ['autnet1']
     #netfiles = ['autnet1', 'autnet0', 'citenet0']
 
     # Comparison networks
@@ -774,3 +782,5 @@ if __name__ == '__main__':
         gt.seed_rng(24680)
 
         run_analysis(netfile, compnet_files)
+
+    print(datetime.now())
