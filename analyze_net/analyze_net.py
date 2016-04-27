@@ -11,12 +11,7 @@ from January 1993 to April 2003.  They can be found at
 
 # Graph-tool modules
 # TODO: import graph_tool.all as gt
-import graph_tool as gt
-import graph_tool.centrality as gtcentral
-import graph_tool.community as comm
-import graph_tool.draw as gtdraw
-import graph_tool.stats as gtstats
-import graph_tool.topology as gttopo
+import graph_tool.all as gt
 
 # Color schemes used in plotting nets
 from matplotlib.cm import PiYG, PiYG_r
@@ -91,7 +86,7 @@ def load_net(infile, core = False, filter = False):
         # Remove everything caught in the filter
         net.purge_vertices()
         # Extract the largest component
-        net.set_vertex_filter(gttopo.label_largest_component(net, directed=False))
+        net.set_vertex_filter(gt.label_largest_component(net, directed=False))
         net.purge_vertices()
         # Rebuild core
         core_pmap = net.vertex_properties['core']
@@ -126,16 +121,16 @@ def layout_and_plot(net, color_pmap, outfile_pre, filename_mod = '.net',
     # If a layout isn't included, calculate it
     if 'layout' not in net.vp:
         print('Calculating graph layout')
-        #net.vp['layout'] = gtdraw.fruchterman_reingold_layout(net)
-        net.vp['layout'] = gtdraw.sfdp_layout(net, verbose = True)
-        #net.vp['layout'] = gtdraw.radial_tree_layout(net, 0, r=2)
+        #net.vp['layout'] = gt.fruchterman_reingold_layout(net)
+        net.vp['layout'] = gt.sfdp_layout(net, verbose = True)
+        #net.vp['layout'] = gt.radial_tree_layout(net, 0, r=2)
     # Set the colormap
     if not reverse_colors:
         colormap = PiYG
     else:
         colormap = PiYG_r
     # Plot the graph
-    gtdraw.graph_draw(net, vertex_fill_color = color_pmap, 
+    gt.graph_draw(net, vertex_fill_color = color_pmap, 
                                 vcmap = colormap,
                                 vertex_size = size_pmap,
                                 edge_pen_width = 1,
@@ -344,7 +339,7 @@ def ev_centrality_dist(net, core, show_plot = False, save_plot = True, outfile =
     :return: The CDF and ranking plots. 
     '''# Calculate eigenvector centrality and write it into the graph
     print('Calculating eigenvector centrality')
-    net.vp['evc'] = gtcentral.eigenvector(net, epsilon=1e-03)[1]
+    net.vp['evc'] = gt.eigenvector(net, epsilon=1e-03)[1]
     print('Done')
     # Extract them into a useful format
     eigen_central = net.vp['evc'].get_array().tolist()
@@ -493,7 +488,7 @@ def plot_sample_dist(samples, observation, stat_label = '$Q$', p_label = None):
 
 
 
-def modularity_sample_dist(net, n_core, obs_mod, mod_func = comm.modularity,
+def modularity_sample_dist(net, n_core, obs_mod, mod_func = gt.modularity,
                             n_samples = 500, seed_int = None,
                             show_plot = False, 
                             save_plot = True, outfile = None):
@@ -581,9 +576,9 @@ def optimal_sample_dist(net, obs_mod,
     print('Generating ' + str(n_samples) + ' optimal partitions')
     while len(samples) < n_samples:
         # Generate an optimal partition
-        temp_part_pmap = comm.community_structure(net, n_iter = 100, n_spins = 2)
+        temp_part_pmap = gt.community_structure(net, n_iter = 100, n_spins = 2)
         # Calculate the modularity and save it in `samples`
-        samples += [comm.modularity(net, temp_part_pmap)]
+        samples += [gt.modularity(net, temp_part_pmap)]
         if len(samples) % 100 == 0:
             print(len(samples))
             
@@ -658,7 +653,7 @@ def run_analysis(netfile, compnet_files):
     # Modularity
     # --------------------
     # Calculate modularity, using the core vertices as the partition
-    modularity = comm.modularity(net, core_pmap)
+    modularity = gt.modularity(net, core_pmap)
     print('Observed modularity: ' + str(modularity))
     obs_ins = insularity(net, core_pmap)
     print('Observed insularity: ' + str(obs_ins))
@@ -680,12 +675,12 @@ def run_analysis(netfile, compnet_files):
     # Information-theoretic partitioning
     print('Information-theoretic partitioning')
     # Calculate the partition
-    part_block = comm.minimize_blockmodel_dl(net, min_B = 2, max_B = 2, 
+    part_block = gt.minimize_blockmodel_dl(net, min_B = 2, max_B = 2, 
                                                 parallel = True)
     # Extract the block memberships as a pmap
     net.vp['partition'] = part_block.get_blocks()
     # Calculate the modularity
-    block_modularity = comm.modularity(net, net.vp['partition'])
+    block_modularity = gt.modularity(net, net.vp['partition'])
     print('Partion modularity: ' + str(block_modularity))
     print('Partition insularities')
     block_insularities = partition_insularity(net, net.vp['partition'])
@@ -695,7 +690,7 @@ def run_analysis(netfile, compnet_files):
     
     print('Plotting')
     #size_pmap = net.new_vertex_property('float', vals = 5 + 5 * core_pmap.a)
-    size_pmap = gtdraw.prop_to_size(core_pmap, mi = 10, ma = 20)
+    size_pmap = gt.prop_to_size(core_pmap, mi = 10, ma = 20)
     layout_and_plot(net, net.vp['partition'], outfile_pre,
                         size_pmap = size_pmap, filename_mod = '.partition')
     
