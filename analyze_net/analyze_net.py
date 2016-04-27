@@ -10,7 +10,6 @@ from January 1993 to April 2003.  They can be found at
 '''
 
 # Graph-tool modules
-# TODO: import graph_tool.all as gt
 import graph_tool.all as gt
 
 # Color schemes used in plotting nets
@@ -575,12 +574,13 @@ def optimal_sample_dist(net, obs_mod, obs_ins,
     :return: p-value, fold induction of observation against sample
     '''    
 	# Initialize a container for samples
-    samples = []
+    samples_mod = []
+    samples_ins = []
     # Set a seed
     if seed_int is not None:
         seed(seed_int)
     print('Generating ' + str(n_samples) + ' optimal partitions')
-    while len(samples) < n_samples:
+    while len(samples_mod) < n_samples:
         # Generate an optimal partition
         temp_part_pmap = gt.community_structure(net, n_iter = 100, n_spins = 2)
         # Calculate the modularity and save it in `samples_mod`
@@ -590,12 +590,12 @@ def optimal_sample_dist(net, obs_mod, obs_ins,
         if len(samples_mod) % 100 == 0:
             print(len(samples))
             
-    # Calculate p-value
+    # Calculate p-value for modularity
     sample_mean = np.mean(samples_mod)
     print('Mean sample modularity: ' + str(sample_mean))
     p = p_sample(samples_mod, obs_mod)
     print('P-value of modularity: ' + str(p))
-    # TODO: insularities
+	# P-value for insularity
     sample_mean = np.mean(samples_ins)
     print('Mean sample insularity: ' + str(sample_mean))
     p = p_sample(samples_ins, obs_ins)
