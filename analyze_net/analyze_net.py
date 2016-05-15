@@ -11,6 +11,7 @@ from January 1993 to April 2003.  They can be found at
 
 # Graph-tool modules
 import graph_tool.all as gt
+import graph_tool.community_old as gtcomm
 
 # Color schemes used in plotting nets
 from matplotlib.cm import bwr, bwr_r
@@ -52,8 +53,8 @@ def load_net(infile, core = False, filter = False):
     outfile_pre = '.'.join(infile.split('.')[:-1])
     
     if path.exists('output/' + outfile_pre + '.out.gt'):
-    	print('Found pre-procesed graph')
-    	infile = 'output/' + outfile_pre + '.out.gt'
+        print('Found pre-procesed graph')
+        infile = 'output/' + outfile_pre + '.out.gt'
     
     print('Loading ' + infile)
     net = gt.load_graph(infile)
@@ -74,7 +75,7 @@ def load_net(infile, core = False, filter = False):
         # Add a filter
         print('Adding filter')
         # Recent papers filter for the citation net
-        if netfile == 'citenet0':
+        if 'citenet0' in infile:
             year = net.vp['year']
             recent_list = [year[vertex] > 2005 for vertex in net.vertices()]
             recent_pmap = net.new_vertex_property('boolean')
@@ -492,7 +493,7 @@ def plot_sample_dist(samples, observation, stat_label = '$Q$', p_label = None):
 
 
 
-def modularity_sample_dist(net, n_core, obs_mod, mod_func = gt.modularity,
+def modularity_sample_dist(net, n_core, obs_mod, mod_func = gtcomm.modularity,
                             n_samples = 500, seed_int = None,
                             show_plot = False, 
                             save_plot = True, outfile = None):
@@ -573,7 +574,7 @@ def optimal_sample_dist(net, obs_mod, obs_ins,
     :param outfile: Filename to save the plot
     :return: p-value, fold induction of observation against sample
     '''    
-	# Initialize a container for samples
+    # Initialize a container for samples
     samples_mod = []
     samples_ins = []
     # Set a seed
@@ -584,7 +585,7 @@ def optimal_sample_dist(net, obs_mod, obs_ins,
         # Generate an optimal partition
         temp_part_pmap = gt.community_structure(net, n_iter = 50, n_spins = 2)
         # Calculate the modularity and save it in `samples_mod`
-        samples_mod += [gt.modularity(net, temp_part_pmap)]
+        samples_mod += [gtcomm.modularity(net, temp_part_pmap)]
         # Likewise with insularities
         samples_ins += [insularity(net, temp_part_pmap)]
         if len(samples_mod) % 25 == 0:
@@ -665,7 +666,7 @@ def run_analysis(netfile, compnet_files):
     # Modularity
     # --------------------
     # Calculate modularity, using the core vertices as the partition
-    modularity = gt.modularity(net, core_pmap)
+    modularity = gtcomm.modularity(net, core_pmap)
     print('Observed modularity: ' + str(modularity))
     obs_ins = insularity(net, core_pmap)
     print('Observed insularity: ' + str(obs_ins))
@@ -692,7 +693,7 @@ def run_analysis(netfile, compnet_files):
     # Extract the block memberships as a pmap
     net.vp['partition'] = part_block.get_blocks()
     # Calculate the modularity
-    block_modularity = gt.modularity(net, net.vp['partition'])
+    block_modularity = gtcomm.modularity(net, net.vp['partition'])
     print('Partion modularity: ' + str(block_modularity))
     print('Partition insularities')
     block_insularities = partition_insularity(net, net.vp['partition'])
