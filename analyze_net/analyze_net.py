@@ -596,11 +596,6 @@ def optimal_sample_dist(net, obs_mod, obs_ins,
     print('Mean sample modularity: ' + str(sample_mean))
     p = p_sample(samples_mod, obs_mod)
     print('P-value of modularity: ' + str(p))
-	# P-value for insularity
-    sample_mean = np.mean(samples_ins)
-    print('Mean sample insularity: ' + str(sample_mean))
-    p = p_sample(samples_ins, obs_ins)
-    print('P-value of insularity: ' + str(p))
 
     # Fold of observation relative to sampling distribution mean
     fold = obs_mod / sample_mean
@@ -610,8 +605,30 @@ def optimal_sample_dist(net, obs_mod, obs_ins,
 
     # Plot the sample distribution
     try:
-        sample_plot = plot_sample_dist(samples, obs_mod, p_label = p)
-    
+        sample_plot = plot_sample_dist(samples_mod, obs_mod, p_label = p)
+        if show_plot:
+            print(sample_plot)
+        if outfile is not None and save_plot:
+            ggsave(filename = outfile + '.opt_sample' + '.pdf', 
+                    plot = sample_plot)
+    except GgplotError:
+        print('Caught `GgplotError`. Skipping plot.')
+
+    # P-value for insularity
+    sample_mean = np.mean(samples_ins)
+    print('Mean sample insularity: ' + str(sample_mean))
+    p = p_sample(samples_ins, obs_ins)
+    print('P-value of insularity: ' + str(p))
+
+    # Fold of observation relative to sampling distribution mean
+    fold = obs_ins / sample_mean
+    if abs(fold) < 1:
+        fold = 1 / fold
+    print('Fold of observed insularity: ' + str(fold))
+
+    # Plot the sample distribution
+    try:
+        sample_plot = plot_sample_dist(samples_ins, obs_ins, p_label = p)
         if show_plot:
             print(sample_plot)
         if outfile is not None and save_plot:
