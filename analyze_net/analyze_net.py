@@ -583,7 +583,8 @@ def optimal_sample_dist(net, obs_mod, obs_ins,
     print('Generating ' + str(n_samples) + ' maximum-modularity partitions')
     while len(samples_mod) < n_samples:
         # Generate an optimal partition
-        temp_part_pmap = gt.community_structure(net, n_iter = 50, n_spins = 2)
+        temp_part_pmap = gtcomm.community_structure(net, n_iter = 50, 
+        				n_spins = 2)
         # Calculate the modularity and save it in `samples_mod`
         samples_mod += [gtcomm.modularity(net, temp_part_pmap)]
         # Likewise with insularities
@@ -668,7 +669,8 @@ def run_analysis(netfile, compnet_files):
     net.vp['layout'] = layout
     # Show only the core vertices    
     net.set_vertex_filter(core_pmap)
-    layout_and_plot(net, core_pmap, outfile_pre, filename_mod = '.core.net', reverse_colors = True)
+    layout_and_plot(net, core_pmap, outfile_pre, filename_mod = '.core.net', 
+    				reverse_colors = True)
     net.set_vertex_filter(None)
     
     # Vertex statistics
@@ -677,8 +679,9 @@ def run_analysis(netfile, compnet_files):
     degree_dist(net, core_vertices, outfile = outfile_pre, 
                 show_plot = False, save_plot = True)
     # ECDF for eigenvector centrality
-    ev_centrality_dist(net, core_vertices, outfile = outfile_pre, 
-                show_plot = False, save_plot = True)
+    ## Currently this is causing a segmentation fault
+#     ev_centrality_dist(net, core_vertices, outfile = outfile_pre, 
+#                 show_plot = False, save_plot = True)
     
     # Modularity
     # --------------------
@@ -705,8 +708,11 @@ def run_analysis(netfile, compnet_files):
     # Information-theoretic partitioning
     print('Information-theoretic partitioning')
     # Calculate the partition
-    part_block = gt.minimize_blockmodel_dl(net, min_B = 2, max_B = 2, 
-                                                parallel = True)
+    gt.seed_rng(5678)
+    np.random.seed(5678)
+    part_block = gt.minimize_blockmodel_dl(net, B_min = 2, B_max = 2, 
+    										verbose = True, 
+    										overlap = False)
     # Extract the block memberships as a pmap
     net.vp['partition'] = part_block.get_blocks()
     # Calculate the modularity

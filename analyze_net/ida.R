@@ -10,7 +10,7 @@ require(xtable)
 
 # ---------- #
 # Load the citation network
-net = read_graph('output/citenet0.out.graphml', format = 'graphml')
+net = read_graph('../2016-04-27/citenet0.out.graphml', format = 'graphml')
 # Convert it to a data frame for convenience
 net_df = get.data.frame(net, what = 'vertices') %>% data.frame
 net_df$partition = as.factor(net_df$partition)
@@ -92,14 +92,21 @@ cor(net_df$evc.rank, net_df$out.degree)**2
 # ---------- #
 # Correlation between core and information-theoretic partition
 # Plot
-contingency_plot <- ggplot(data = net_df) +
-	geom_point(aes(x = partition, y = core, color = partition, alpha = core), 
-			   #alpha = .5,
-			   position = position_jitter()) +
-	scale_color_brewer(palette = 'Set1', guide = FALSE) +
-	scale_alpha_discrete(guide = FALSE) +
-	xlab('Information-theoretic partition') +
-	ylab('Core partition')
+# contingency_plot <- ggplot(data = net_df) +
+# 	geom_point(aes(x = partition, y = core, color = partition, alpha = core), 
+# 			   #alpha = .5,
+# 			   position = position_jitter()) +
+# 	scale_color_brewer(palette = 'Set1', guide = FALSE) +
+# 	scale_alpha_discrete(guide = FALSE) +
+# 	xlab('Information-theoretic partition') +
+# 	ylab('Core partition')
+contingency_plot <-ggplot(data = net_df, aes(core, fill = partition)) + 
+	geom_bar(position = 'fill') + 
+	scale_fill_brewer(palette = 'Set1', guide = FALSE) +
+	xlab('Core partition') + 
+	scale_y_continuous(labels = scales::percent, 
+					   name = 'Information-theoretic partition', 
+					   breaks = c(0, .5, 1))
 contingency_plot
 save_plot('contingency.png', contingency_plot, base_aspect_ratio = 1.5)
 
@@ -135,5 +142,30 @@ pwr.chisq.test(N = sum(corepart_table),
 # matrix(c(340,0,46000,33000), nrow = 2) %>% as.table %>% #chisq.test(correct = FALSE)
 # 	cramersV(correct = FALSE) %>% . ** 2
 #ES.w2(thing/sum(thing))	
+
+
+# ---------- #
+# Core components vs. information-theoretic partition
+V(core_net)$component = components(core_net)$membership
+core_df = get.data.frame(core_net, what = 'vertices')
+
+# Which core connected components have nodes in both partitions? 
+core_df %>% group_by(component, partition) %>% summarize(n = n()) %>%
+	reshape2::dcast(component ~ partition) %>%
+	filter(complete.cases(.))
+
+
+# ---------- #
+# Communities within the core net
+comm = core_net %>% simplify %>% as.undirected %>% cluster_fast_greedy
+V(core_net)$membership = comm$membership
+
+core_net %>%
+	induced_subgraph(V(.)$component == 1) %>%
+plot(vertex.label = NA, 
+	 vertex.size = 3, 
+	 edge.arrow.size = 0, 
+	 vertex.color = V(.)$membership)
+
 
 
