@@ -1,5 +1,7 @@
 # Overview
 
+[![DOI](https://zenodo.org/badge/22049/dhicks/cite-network.svg)](https://zenodo.org/badge/latestdoi/22049/dhicks/cite-network)
+
 This repository contains several tools for citation network construction and analysis, originally developed for the project described in `bibliometrics.pdf`.  The folders contain a series of Python 3 scripts, intended to be used sequentially as follows:  
 
 ![Flow diagram for data sources, files, and scripts](flow.png)
@@ -27,3 +29,5 @@ This repository contains several tools for citation network construction and ana
 # Major To-dos
 
 * `downstream.py`: Documentation, this readme, flow diagram
+
+
