@@ -1,0 +1,261 @@
+---
+title: "S2 Topic Analysis of the Core Set Abstracts"
+author: "Daniel J. Hicks"
+date: "11/15/2016"
+output:
+  pdf_document: 
+    latex_engine: lualatex
+geometry: margin = 1.5in
+bibliography: /Users/dhicks1/Dropbox/latex/texmf/bibtex/bib/library.bib
+csl: plos-one.csl
+---
+
+# Introduction #
+
+A reviewer suggested that text analysis could be used to interpret the partition in figure 6 of the main paper.  To be clear, this partition is imposed on the citation network, in the sense that the partition algorithm is forced to produce a partition with exactly 2 communities.  2 communities would not necessarily minimize the description length of the network, and thus might not be optimal from the perspective of the blockmodel approach.  For the purposes of this project, the optimal partition structure of the citation network is less interesting than whether the core vertices are confined to a single community of a binary partition of the whole network.  
+
+Text analysis might still be useful for understanding the core set itself.  Specifically, does the blockmodel partition of the core set correspond to any textual differences?  This analysis examines that question.  For data reasons discussed below, as well as considerations of length, this analysis was conducted in an ad hoc fashion, rather than integrated into the primary analysis discussed in the main paper.  
+
+<!--
+# Knitting this Document #
+
+The R code used in this document is largely located in the external files `text scrape.R` and `lda.R`.  The file `api key.R` should also contain an assignment of a Scopus API key.  The LDA stability testing process is fairly slow; the code has been parallelized to run on 4 cores, and automatically saves the results.  I recommend running `lda.R` independently before attempting to knit this document.  
+
+Primary library dependencies are given in the following block:  
+```{r}
+library(tidyverse)
+library(httr)
+library(igraph)
+library(knitr)
+library(tidytext)
+library(topicmodels)
+library(reshape2)
+library(stringr)
+library(xtable)
+
+library(foreach)
+library(doParallel)
+```
+
+In addition, two data files are needed.  
+
+1. Both `text scrape.R` and the analysis code in the Results section expect to find the analyzed graph file `citenet0.out.graphml` at the path `../2016-04-27/`.  
+
+2. `text scrape.R` requires a Scopus API key, which it expects will be defined in `api key.R`.  Note that an API key is *not* included in this repository, but can be obtained for free by registering at <dev.elsevier.com>.  
+-->
+
+```{r knitr-setup, echo = FALSE, message = FALSE, warning = FALSE}
+library(cowplot)
+library(knitr)
+library(xtable)
+options(xtable.include.rownames = FALSE, xtable.comment = FALSE, 
+		xtable.table.placement = 't')
+
+fig.height = 3
+fig.width = 1.5 * fig.height
+font_size = 8
+
+opts_chunk$set(fig.height = fig.height, fig.width = fig.width, 
+			   fig.align='center', fig.pos = 't',
+			   dev = 'tikz', sanitize = TRUE, 
+			   echo = FALSE, message=FALSE, warning=FALSE)
+
+```
+
+<!-- Format figure and table counters for supplement -->
+\renewcommand\thefigure{S.\arabic{figure}}
+\renewcommand{\thetable}{S.\arabic{table}}
+
+# Data #
+
+Paper abstracts were not retrieved in the original data collection process.  This was primarily a matter of computational resources.  Due to the number of nodes of the network, even with only relatively little paper metadata, the `graphml` file containing the network is relatively large (nearly 1 GB on disk).  Including  abstracts could easily increase the size of this file 2 or 3 times.  Working with a single file this large could have severely taxed the computational machinery available for this project.  Also, due to weekly quotas imposed by the Scopus API, retrieving abstracts for 80,120 papers would have delayed revisions to the manuscript by several weeks.  By contrast, text analysis of the core set papers alone would require far fewer resources, and abstracts for all of these papers can be retrieved in less than an hour.  For these reasons, I chose to conduct a text analysis of the core set abstracts.  
+
+<!-- The file `text scrape.R` first identifies the DOIs for the core papers, then uses the Scopus API to retrieve the abstracts (referred to as "decriptions" in the API).  These descriptions are then stored in the file `core descriptions.Rdata` for use in further steps of this analysis.  -->
+
+```{r scrape, message = FALSE, warning = FALSE}
+spin_child('text scrape.R')
+```
+
+
+# Method # 
+
+Topic models, fit using Latent Dirichlet Allocation, are a common tool in unsupervised text analysis, even in fields that do not traditionally use computational methods [@Blei2003; @Mohr2013].  Briefly, topic models use a Bayesian method to group words into a given number of topics based on their co-occurrence patterns.  Documents are modeled as drawing words randomly from these topics according to a latent conditional distribution across topics: $\gamma_{i,j} = \mathrm{pr}(\mathrm{topic}_i | \mathrm{document}_j)$.  A high value of $\gamma_{i,j}$ indicates that document $j$ draws almost exclusively from topic $i$. Topic models have been found to be efficient for discovering syntactic patterns across large-document corpuses, even when each individual document is small, such as Twitter tweets [@Hong2010].  
+
+## Topic Stability ##
+
+Topic model algorithms generally require analysts to manually specify the number of topics $k$ in the model, and fitted models are generally evaluated either by their ability to classify held-out documents according to human-curated categories [@Wallach2009] or by human judgment that the word assignments to topics are "relevant and intuitive" [@Chang2009].  By contrast, @Greene2014 provide a method to quantitatively assess the stability of topic modeling across a range of values of $k$.  Briefly, the method first constructs several subsamples $s_1, \ldots, s_n$ of the entire corpus; below, we use 50 samples, each comprising 80% of the documents in the core set.  Next, for each value of $k$ under consideration, the method fits a model with $k$ topics to the entire corpus $s_0$ and the subsamples $s_1, \ldots, s_n$.  An agreement score is then calculated for each $s_1, \ldots, s_n$, relative to $s_0$.  The distribution of agreement scores for a given value of $k$ indicate the stability of the topic model with $k$ topics for the entire corpus $s_0$.  
+
+The method introduced by @Greene2014 evaluates agreement in terms of the rank lists of terms in each topic model; roughly, two models agree insofar as the top 20 terms in each topic are the same.  For the purposes of the current analysis, the stability of the document assignments is more interesting than the stability of the term lists.  Thus, in this analysis, agreement scores between models are calculated in terms of the correlations of the $\gamma_{i,j}$, the posterior distributions of topics for each document.  
+
+
+## Topic-Partition Comparison ##
+
+After a value of $k$ is selected, we compare the document assignments in the topic model to the blockmodel partition.  Because topic models fit posterior probabilities $\gamma_{i,j}$, topic assignment can be handled either discretely or continuously.  For a discrete assignment, document $j$ is assigned to topic $i$ if, and only if, $\gamma_{i,j}$ is greater than a certain threshold; below we use $\gamma_{i,j} > .8$.  With $k=2$ topics, this gives us 3 bins of core papers:  in topic $A$, in topic $B$, and in neither topic.  This tripartite classification of papers is then compared to the blockmodel partition assignments, using a contingency table approach similar to that used to compare the core partition with the blockmodel partition.  
+
+With $k=2$, topic assignments can be handled continuously by simply working with one of the two families $\gamma_{A,j}$, that is, the posterior probabilities of a given topic $A$ across all documents $j$.  Since $\gamma_{A,j} = 1 - \gamma_{B,j}$, low values of $\gamma_{A,j}$ correspond to documents $j$ that are "assigned" to topic $B$.  
+
+
+# Results #
+
+<!-- The file `lda.R` conducts the LDA stability analysis. -->
+
+```{r lda, cache = TRUE, include = FALSE}
+spin_child('lda.R')
+```
+```{r, fig.cap = 'LDA stability analysis results. Points report agreement scores for corpus subsamples fit to a topic model with $k$ topics. The line gives the mean agreement at each value of $k$. \\label{fig.lda}'}
+lda_stability_plot
+```
+
+In figure \ref{fig.lda}, points indicate the agreement score for each sample at each value of $k$; the line indicates the mean agreement score at each value of $k$.  The plot indicates that $k=2$ is somewhat more stable than other values of $k$, on average, but with much more variance.  Thus, $k=2$ should be considered at best only moderately stable.  We proceed with $k=2$ as the best available option. <!-- In `lda.R`, this fitted topic model is saved in the file `descriptions lda gamma.Rdata`. -->
+
+<!-- To begin our comparison with the blockmodel partition, we start by loading both the network and the topic model.  -->
+
+```{r}
+library(igraph)
+library(tidyverse)
+library(tidytext)
+
+## Load net of core vertices
+net.load = read_graph('/Users/dhicks1/Google Drive/Coding/cite network/analyze_net/output/citenet0.out.graphml', format = 'graphml')
+net = induced_subgraph(net.load, V(net.load)$core)
+rm(net.load)
+
+## Load fitted LDA and extract gamma values
+load('descriptions lda.Rdata')
+descriptions_lda_gamma = tidy(descriptions_lda, matrix = 'gamma') %>%
+	spread(topic, gamma, sep = '.')
+```
+
+The network contains `r length(V(net))` core nodes, but Scopus returned abstracts for only `r nrow(descriptions_lda_gamma)` papers.  For discrete topic assignments, documents — core paper abstracts — are binned into topics using a threshold $\gamma_{i,j} > .8$.  
+
+```{r}
+threshold = .8
+descriptions_lda_gamma = descriptions_lda_gamma %>%
+	mutate(topic = ifelse(topic.1 > threshold, 'A', 
+						  ifelse(topic.2 > threshold, 'B', 
+						  	   'ambiguous')))
+```
+
+To visualize the distribution of topics over the core nodes, we work with the continuous $\gamma$ value for one of the two topics, coloring nodes more red insofar as they have a higher posterior value for this topic and more blue insofar as they have a lower value.  Node shapes are used to indicate blockmodel community membership.  See figure \ref{fig.network}. 
+
+```{r}
+## Add topic assignments to net
+V(net)[match(descriptions_lda_gamma$document, V(net)$doi)]$topic =
+	descriptions_lda_gamma$topic.1
+## Construct a palette running from red to blue
+## As per http://stackoverflow.com/a/27004937/3187973
+color_breaks = 5
+palette = colorRampPalette(c('blue','red'))(color_breaks)
+## Match colors to topic order
+V(net)$color = palette[cut(as.numeric(V(net)$topic), color_breaks)]
+
+V(net)$shape = ifelse(V(net)$partition == 1, 'square', 'circle')
+```
+
+```{r, fig.height = 6, fig.cap = 'The core nodes. Node shading indicates topic assignment; papers fully associated with topics are either pure blue or pure red, and papers in between are shades of purple. Node shape indicates blockmodel partition membership; circle nodes are in partition 0, while square nodes are in partition 1. Note that \\texttt{igraph}, used for network analysis and plotting in this supplement, cannot interpret the layout calculated by \\texttt{graph-tool}.  Therefore the positions in this plot do not correspond to those in the figures in the manuscript. \\label{fig.network}'}
+## Plot network
+par(mar = c(0,0,0,0))
+plot(net,
+	 vertex.label = '',
+	 vertex.size = 3,
+	 edge.arrow.size = 0)
+```
+
+The connected components are generally homogeneous in terms of topics, though the largest connected component contains several purple nodes — indicating a mid-range value of $\gamma$ — and a few blue ones.  To investigate this further, we plot the $\gamma$ values of a given node's neighbors against the node's own value of $\gamma$; see figure \ref{fig.nbhd-gamma}. 
+
+```{r, warning=FALSE}
+## Extract neighborhoods for each node
+nbhds = lapply(V(net), function (x) neighbors(net, x, mode = 'all'))
+
+## Get gammas for each neighbor
+nbhd_gammas = lapply(nbhds, function (nbhd) V(net)[nbhd]$topic)
+names(nbhd_gammas) = V(net)$topic
+
+## Organize into data frames
+local_gammas = tibble(node_gamma = as.numeric(names(unlist(nbhd_gammas))), 
+	   neighbor_gamma = as.numeric(unlist(nbhd_gammas)))
+```
+
+```{r, fig.cap = "$\\gamma$ values of a given node's neighbors, plotted against the node's own value of $\\gamma$. The blue line indicates a linear regression. \\label{fig.nbhd-gamma}"}
+## Plot 
+ggplot(local_gammas, aes(node_gamma, neighbor_gamma)) + 
+	geom_point() + 
+	geom_smooth(method = 'lm') + 
+	xlab('node gamma') +
+	ylab('neighbor gamma')
+```
+
+In figure \ref{fig.nbhd-gamma}, the blue line indicates a linear regression.  This regression fits the data much better than might be suggested by the plot; $R^2 = `r with(local_gammas, cor(node_gamma, neighbor_gamma, use = 'complete.obs'))^2 %>% format(digits = 2)`$.  (The appearance of poor fit might be due to tightly-clustered points near the upper-right and lower-left corners of the plot.)  This strong correlation indicates that connected nodes tend to have very similar topic assignments. 
+
+In the network plot, different node shapes correspond to the two communities of the blockmodel partition.  This visualization strongly suggests a correlation between topics and this partition.  To make this comparison more carefully, we construct a contingency table of blockmodel partition vs. discrete topic assignment.  See table \ref{tab.contingency}. <!-- Using `right_join` automatically restricts the data to only those documents that were fit in the topic model. --> 
+
+```{r, results = 'asis'}
+## Extract the vertex data to a dataframe
+vertices_df = igraph::as_data_frame(net, what = 'vertices') %>% select(-topic)
+## Load the scraped data to retrieve the article titles
+load('scraped text.Rdata')
+## Combine 
+dataf = vertices_df %>% 
+	right_join(scraped_text_df) %>%
+	right_join(descriptions_lda_gamma, by = c('doi' = 'document')) %>%
+	select(partition, topic, topic.1, topic.2, doi, title) %>%
+	filter(!duplicated(.))
+# rm(vertices_df, scraped_text_df, descriptions_lda_gamma)
+
+with(dataf, table(partition, topic)) %>% 
+	xtable(caption = 'Contingency table of blockmodel partition (rows) against topic assignment (columns).', 
+		   label = 'tab.contingency')
+```
+
+There is a very strong correlation between the partitions and topic assignments.  This can also be seen if we plot $\gamma_{a,j}$, the posterior distribution for topic $A$, against blockmodel partition assignment; see figure \ref{fig.gamma-block}.  
+
+```{r, fig.cap = '$\\gamma$ value for topic $A$, plotted against blockmodel partition membership. The red line connects the mean values across the two partitions. \\label{fig.gamma-block}'}
+ggplot(dataf, aes(partition, topic.1)) + 
+	geom_point(position = position_jitter(width = .4)) + 
+	stat_summary(color = 'red', geom = 'line') +
+	# geom_smooth(method = 'lm') + 
+	scale_x_continuous(breaks = c(0, 1), name = 'blockmodel partition') + 
+	ylab(expression(gamma['A,j']))
+```
+
+However, it is difficult to map these topics to recognizable areas of toxicology research.  Tables \ref{tab.topicA} and \ref{tab.topicB} give DOIs, titles, and $\gamma$ values for the 10 articles mostly highly associated with topics $A$ and $B$, respectively.  Both tables contain papers on fundamental HTT research as well as applications of HTT to both human health and ecotoxicology.  Similarly, table \ref{tab.termlists} shows the terms most associated with the two topics.  "Chemical," "results," "exposure," and "data" appear in both lists, suggesting that the two topics substantially overlap.  This lack of clarity and distinctness in the topics corresponds to the lack of stability observed above.  It appears that the LDA model is unable to find substantive, consistent patterns in the distribution of terms.  
+
+```{r, results = 'asis'}
+## 10 papers in topic A
+dataf %>% select(doi, title, gamma = topic.1) %>% 
+	top_n(10, wt = gamma) %>%
+	arrange(title) %>%
+	xtable(align = 'llp{3in}r', 
+		   caption = '10 articles most highly associated with topic $A$', 
+		   label = 'tab.topicA')
+```
+
+```{r, results = 'asis'}
+## 10 papers in topic B
+dataf %>% select(doi, title, gamma = topic.2) %>% 
+	top_n(10, wt = gamma) %>%
+	arrange(title) %>%
+	xtable(align = 'llp{3in}r', 
+		   caption = '10 articles most highly associated with topic $B$', 
+		   label = 'tab.topicB')
+```
+
+```{r, results = 'asis'}
+term_lists = descriptions_lda %>% tidy %>%
+	group_by(topic) %>%
+	top_n(15, wt = beta) %>%
+	arrange(beta) %>%
+	ungroup() %>%
+	split(.$topic)
+term_lists %>% lapply(function (x) x$term) %>%
+	as_tibble() %>% 
+	rename(`topic A` = `1`, `topic B` = `2`) %>%
+	xtable(caption = 'Top 15 terms for topics A and B', 
+		   label = 'tab.termlists')
+```
+
+# Conclusion #
+
+While this analysis finds very good concordance between the $k=2$ topic model and the core nodes, in terms of both the citation network connecting these nodes by themselves and in terms of the blockmodel partition that they inherit from the larger citation network, text analysis of paper abstracts does *not* provide much insight into these topological features of this particular citation network.  
+
+# References #
